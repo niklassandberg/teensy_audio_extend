@@ -77,94 +77,66 @@ void GrainParameter::fade(float ms) {
 
 void AudioEffectGrainer::setBlock(audio_block_struct * out,
 		GrainStruct* pGrain) {
-	//TODO: test
-//	if (pGrain->sizePos == 0) {
-//		pGrain->state = GRAIN_PLAYING;
-//		audio_block_struct * in = audioBuffer.data[audioBuffer.head];
-//		int16_t * src = in->data;
-//		int16_t * dst = out->data;
-//		int16_t * end = src + AUDIO_BLOCK_SAMPLES;
-//		while (src < end) {
-//			*dst++ = *src++;
-//		}
-//		pGrain->sizePos = pGrain->size;
-//		return;
-//	} else {
-//		pGrain->state = GRAIN_ENDED;
-//		return;
-//	}
 
 	uint16_t blockPos = pGrain->start;
 	uint16_t state = pGrain->state;
 	bool addGrain = false;
 
+
+	if (state == GRAIN_TRIG) {
+		if (blockPos <= audioBuffer.head)
+			blockPos = audioBuffer.head - blockPos;
+		else
+			blockPos = (audioBuffer.len + audioBuffer.head) - blockPos;
+		state = GRAIN_PLAYING;
+	} else {
+		blockPos = pGrain->pos;
+	}
+
 	if (window != NULL && pGrain->sizePos < (pGrain->size << 1)) {
+
 		uint16_t fadePhaseIncr = (0x8000 / pGrain->size); //TODO: move into GrainStruct
 		uint32_t totalSample = pGrain->sizePos * AUDIO_BLOCK_SAMPLES;
-		uint16_t fadeBlockIndex = totalSample / ((int32_t) pGrain->size); //TODO: opt!!!
-		uint16_t fadeSampleOffset = totalSample % ((int32_t) pGrain->size); //TODO: opt!!!
-		fadeBlockIndex += (fadeSampleOffset != 0);
-		int16_t * dst = out->data;
-		int16_t * end = dst + AUDIO_BLOCK_SAMPLES;
-		const int16_t * windowSrc = window + fadeBlockIndex;
-		if (fadeBlockIndex >= WINDOW_SIZE)
-			dst = end;
-		while (dst < end) {
-			if (fadeSampleOffset == 0) {
-				*dst++ = *windowSrc++;
-				if (++fadeBlockIndex >= WINDOW_SIZE)
-					dst = end;
-			} else {
-				//https://stackoverflow.com/questions/34098800/lerp-for-integers-or-in-fixed-point-math
-				//F from 0 to 1024, by other words phase_incr.
-				int32_t F = fadeSampleOffset * ((int32_t) fadePhaseIncr);
+		uint16_t windowSampleIndex = totalSample / ((int32_t) pGrain->size); //TODO: opt!!!
+		uint16_t windowSampleOffset = totalSample % ((int32_t) pGrain->size); //TODO: opt!!!
+		windowSampleIndex += (windowSampleOffset != 0);
 
-				int32_t val1 = (*(windowSrc - 1)) * (0x8000 - F);
-				int32_t val2 = (*windowSrc) * F;
-				int32_t magnitude = 0x7FFF;
-//				*dst++ = multiply_32x32_rshift32(val1 + val2, magnitude);
-				*dst++ = (val1 + val2) >> 15;
+		audio_block_t * in = audioBuffer.data[blockPos];
+		int16_t * dst = out->data;
+		const int16_t * inputSrc = in->data;
+		const int16_t * windowSrc = window + windowSampleIndex;
+		int16_t * end = dst + AUDIO_BLOCK_SAMPLES;
+
+		while (dst < end) {
+			int16_t windowSample;
+
+			if (windowSampleOffset == 0)
+			{
+				windowSample = *windowSrc++;
+				++windowSampleIndex;
 			}
-			if (++fadeSampleOffset > pGrain->size - 1)
-				fadeSampleOffset = 0;
+			else
+			{
+				int32_t wPrev = *(windowSrc - 1);
+				int32_t w = (windowSampleIndex >= WINDOW_SIZE) ? *window : *windowSrc;
+				int32_t F = windowSampleOffset * ((int32_t) fadePhaseIncr);
+				int32_t val1 = wPrev * (0x8000 - F);
+				int32_t val2 = w * F;
+				windowSample = signed_saturate_rshift(val1 + val2, 16, 15);
+			}
+			if (++windowSampleOffset > pGrain->size - 1)
+				windowSampleOffset = 0;
+
+			int32_t inputSample = *inputSrc++;
+			*dst++ += signed_saturate_rshift(
+					multiply_16bx16b(inputSample, windowSample),
+					16, 15);
 		}
 
 		addGrain = true;
-	} else if (pGrain->sizePos < pGrain->size) {
-		int16_t middleVal = AudioWindowHamming256[WINDOW_SIZE >> 1];
-		memset(out->data, middleVal, AUDIO_BLOCK_SAMPLES * sizeof(int16_t));
-		addGrain = true;
-	} //else if: no window but grain. Give it flat window.
-	else if (pGrain->sizePos < pGrain->size + pGrain->space) {
-		//TODO: is this needed???
-		memset(out->data, 0, AUDIO_BLOCK_SAMPLES * sizeof(int16_t));
 	} else {
 		pGrain->state = GRAIN_ENDED;
 		return;
-	}
-
-	if (addGrain) {
-		if (state == GRAIN_TRIG) {
-			if (blockPos <= audioBuffer.head)
-				blockPos = audioBuffer.head - blockPos;
-			else
-				blockPos = (audioBuffer.len + audioBuffer.head) - blockPos;
-			state = GRAIN_PLAYING;
-		} else {
-			blockPos = pGrain->pos;
-		}
-
-		audio_block_t * in = audioBuffer.data[blockPos];
-		int16_t * src = in->data;
-		int16_t * dst = out->data;
-		int16_t * end = dst + AUDIO_BLOCK_SAMPLES;
-		while (dst < end) {
-			int32_t val1 = *src++;
-			int32_t val2 = *dst;
-			*dst++ = signed_saturate_rshift(multiply_16bx16b(val1, val2), 16,
-					15);
-			//*dst++ = *src++;;
-		}
 	}
 
 	//Over windowsize. We want overlap!!!
@@ -182,11 +154,9 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out,
 void AudioEffectGrainer::update() {
 	//Wait until audio buffer is full.
 	if (!fillAudioBuffer()) return;
-	//Allocate input and output data.
-	audio_block_t * in = AudioStream::allocate();
-	if (!in) return;
+	//Allocate output data.
 	audio_block_t * out = AudioStream::allocate();
-	if (!out) return release(in);
+	if (!out) return;
 	memset(out->data, 0, sizeof(out->data));
 
 	//Get next free grain if no grains is playing.
@@ -214,8 +184,7 @@ void AudioEffectGrainer::update() {
 			grain->state = GRAIN_TRIG;
 		}
 
-		memset(in->data, 0, sizeof(in->data));
-		setBlock(in, grain);
+		setBlock(out, grain);
 
 		if (grain->state == GRAIN_ENDED) {
 
@@ -228,16 +197,6 @@ void AudioEffectGrainer::update() {
 			}
 
 			GrainStruct * free = grain;
-
-//			if (playGrain == grain) {
-//				playGrain = grain->next;
-//				grain = playGrain;
-//			}
-//			else if (prev != NULL) {
-//				prev->next = grain->next;
-//				grain = prev->next;
-//			}
-//			else grain = grain->next;
 
 			if (playGrain == grain) grain = playGrain = grain->next;
 			else if (prev != NULL) grain = prev->next = grain->next;
@@ -263,19 +222,11 @@ void AudioEffectGrainer::update() {
 			}
 			prev = grain;
 			grain = grain->next;
-
-			int16_t * src = in->data;
-			int16_t * dst = out->data;
-			int16_t * end = src + AUDIO_BLOCK_SAMPLES;
-			while (src < end) {
-				*dst++ += *src++;
-			}
 		}
 	}
 
 	transmit(out);
 	release(out);
-	release(in);
 }
 
 void AudioEffectGrainer::queueLength(uint16_t l) {
