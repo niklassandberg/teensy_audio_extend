@@ -46,8 +46,7 @@ void GrainParameter::pitch(float p) {
 }
 
 void GrainParameter::durration(float ms) {
-	uint16_t blocks = (ms * AudioEffectGrainer::MS_AUDIO_SAMPLE_RATE_EXACT
-			+ 0.5) / AUDIO_BLOCK_SAMPLES;
+	uint16_t blocks = ms2block(ms);
 	if (blocks < 2)
 		blocks = 2;
 	else if (blocks > queue->len - 1)
@@ -58,22 +57,19 @@ void GrainParameter::durration(float ms) {
 }
 
 void GrainParameter::pos(float ms) {
-	uint16_t blocks = (ms * AudioEffectGrainer::MS_AUDIO_SAMPLE_RATE_EXACT
-			+ 0.5) / AUDIO_BLOCK_SAMPLES;
+	uint16_t blocks = ms2block(ms);
 	if (blocks > queue->len - 1)
 		blocks = queue->len - 1;
 	sender.start = blocks;
 }
 
 void GrainParameter::space(float ms) {
-	uint16_t blocks = (ms * AudioEffectGrainer::MS_AUDIO_SAMPLE_RATE_EXACT
-			+ 0.5) / AUDIO_BLOCK_SAMPLES;
+	uint16_t blocks = ms2block(ms);
 	sender.space = blocks;
 }
 
 void GrainParameter::fade(float ms) {
-	uint16_t blocks = (ms * AudioEffectGrainer::MS_AUDIO_SAMPLE_RATE_EXACT
-			+ 0.5) / AUDIO_BLOCK_SAMPLES;
+	uint16_t blocks = ms2block(ms);
 	if (blocks > sender.size)
 		blocks = sender.size;
 	sender.fade = blocks;

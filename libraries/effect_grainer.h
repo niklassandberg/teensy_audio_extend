@@ -53,6 +53,15 @@ extern const int16_t AudioWindowTukey256[];
 #define GRAIN_TRIG 4
 #define GRAIN_OVERLAP 8
 
+
+static constexpr float MS_TO_BLOCK_SCALE =
+		(AUDIO_SAMPLE_RATE_EXACT) / (AUDIO_BLOCK_SAMPLES * 1000.0);
+
+inline __attribute__((always_inline)) uint16_t ms2block(float ms)
+{
+	return ms * MS_TO_BLOCK_SCALE +.5;
+}
+
 //For debug
 #define PRINT_GRAIN 0
 #define DEBUG_GRAIN_PRINT_DELAY_MEMBERS 0
@@ -198,8 +207,6 @@ private:
 
 public:
 
-	static constexpr float MS_AUDIO_SAMPLE_RATE_EXACT = AUDIO_SAMPLE_RATE_EXACT / 1000.0;
-
 	AudioEffectGrainer();
 
 	bool fillAudioBuffer();
@@ -211,7 +218,6 @@ public:
 	void freezer(bool f);
 	GrainParameter * next();
 	void grainFreeze(bool f);
-
 };
 
 #endif /* EFFECT_PITCHSHIFTER_H_2_ */
