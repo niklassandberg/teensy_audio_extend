@@ -75,13 +75,16 @@ void GrainParameter::fade(float ms) {
 	sender.fade = blocks;
 }
 
-void AudioEffectGrainer::setBlock(audio_block_struct * out,
-		GrainStruct* pGrain) {
+void GrainParameter::amplitude(float n) {
+	if (n < 0) n = 0;
+	else if (n > 1.0) n = 1.0;
+	sender.magnitude = n * 65536.0;
+}
+
+void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain) {
 
 	uint16_t blockPos = pGrain->start;
 	uint16_t state = pGrain->state;
-	bool addGrain = false;
-
 
 	if (state == GRAIN_TRIG) {
 		if (blockPos <= audioBuffer.head)
@@ -122,24 +125,24 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out,
 				int32_t F = windowSampleOffset * ((int32_t) fadePhaseIncr);
 				int32_t val1 = wPrev * (0x8000 - F);
 				int32_t val2 = w * F;
-				windowSample = signed_saturate_rshift(val1 + val2, 16, 15);
+				windowSample = signed_saturate_rshift( val1 + val2 , 16, 15);
 			}
+
 			if (++windowSampleOffset > pGrain->size - 1)
 				windowSampleOffset = 0;
 
 			int32_t inputSample = *inputSrc++;
-			*dst++ += signed_saturate_rshift(
-					multiply_16bx16b(inputSample, windowSample),
-					16, 15);
+			*dst++ += multiply_32x32_rshift32(
+							multiply_16bx16b(inputSample, windowSample),
+					pGrain->magnitude );
 		}
 
-		addGrain = true;
 	} else {
 		pGrain->state = GRAIN_ENDED;
 		return;
 	}
 
-	//Over windowsize. We want overlap!!!
+	//Over window size. We want overlap!!!
 	if (pGrain->sizePos >= pGrain->size) {
 		state |= GRAIN_OVERLAP;
 	}
@@ -164,7 +167,7 @@ void AudioEffectGrainer::update() {
 		playGrain = freeGrain;
 		freeGrain = freeGrain->next;
 		playGrain->next = NULL;
-		//TODO: WY DO WE NEED TO DO THIS!!!!
+		//TODO: WHY DO WE NEED TO DO THIS!!!!
 		playGrain->state = GRAIN_AVAILABLE;
 	}
 
@@ -241,10 +244,6 @@ void AudioEffectGrainer::freezer(bool f) {
 }
 
 GrainParameter * AudioEffectGrainer::next() {
-	//uint8_t grainIndex = (grainEnd+1) % GRAINS_MAX_NUM;
-	//if( grainIndex == grainStart )
-	//		return NULL;
-	//if: prepare for next grain.
 	grainParam.init(&audioBuffer);
 	return &grainParam;
 }

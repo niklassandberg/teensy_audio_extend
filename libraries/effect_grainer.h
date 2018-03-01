@@ -73,6 +73,7 @@ struct GrainStruct
 	uint16_t pos = 0; //next grain position in queue.
 	uint16_t space = 0; //space between duration.
 	uint16_t size = 50; //grain size in blocks
+	int32_t magnitude = 1073741824;
 	uint16_t sizePos = 0; //how many blocks have been played from start.
 	uint16_t fade = 0;
 
@@ -162,6 +163,8 @@ public:
 	void pos(float ms);
 	void space(float ms);
 	void fade(float ms);
+	void amplitude(float n);
+
 	bool send()
 	{
 		//TODO: that about polling in teensy or interrupts?
@@ -177,6 +180,7 @@ public:
 		g.start = resi.start;
 		g.state = GRAIN_TRIG;
 		g.sizePos = 0;
+		g.magnitude = resi.magnitude;
 		resiving = false;
 	}
 private:
