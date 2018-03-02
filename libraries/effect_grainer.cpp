@@ -92,6 +92,15 @@ void GrainParameter::amplitude(float n)
 	mSender.magnitude = n * 65536.0;
 }
 
+
+void AudioEffectGrainer::interval(float ms)
+{
+	uint16_t blocks = ms2block(ms);
+	if (blocks < 1)
+		blocks = 1;
+	mTriggGrain = blocks;
+}
+
 void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 {
 
@@ -157,7 +166,7 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 	}
 	else
 	{
-		pGrain->state = GRAIN_ENDED;
+		pGrain->state = GRAIN_HAS_ENDED;
 		return;
 	}
 
@@ -179,72 +188,72 @@ GrainStruct * AudioEffectGrainer::getFreeGrain()
 	return grain;
 }
 
-void AudioEffectGrainer::freeGrain(GrainStruct*& grain, GrainStruct* prev)
-{
-	GrainStruct* free = grain;
-	if (mPlayGrain == grain)
-		grain = mPlayGrain = grain->next;
-	else if (prev != NULL)
-		grain = prev->next = grain->next;
-	else
-		grain = grain->next;
+GrainStruct* AudioEffectGrainer::freeGrain(GrainStruct * grain, GrainStruct* prev)
+	{
+		GrainStruct* free = grain;
+		if (mPlayGrain == grain)
+			grain = mPlayGrain = grain->next;
+		else if (prev != NULL)
+			grain = prev->next = grain->next;
+		else
+			grain = grain->next;
 
-	free->next = mFreeGrain;
-	free->state = GRAIN_AVAILABLE;
-	mFreeGrain = free;
-}
+		free->next = mFreeGrain;
+		free->state = GRAIN_AVAILABLE;
+		mFreeGrain = free;
+		return grain;
+	}
 
 void AudioEffectGrainer::update()
 {
 	//Wait until audio buffer is full.
 	if (!fillAudioBuffer())
 		return;
+
 	//Allocate output data.
 	audio_block_t * out = AudioStream::allocate();
-	if (!out)
-		return;
+	if (!out) return;
 	memset(out->data, 0, sizeof(out->data));
 
-	//Get next free grain if no grains is playing.
-	if (!mPlayGrain)
-		mPlayGrain = getFreeGrain();
+	if( ++mTriggCount >= mTriggGrain )
+	{
+		mTriggCount = 0;
+		GrainStruct * triggedGrain = getFreeGrain();
+		if(triggedGrain)
+		{
+			triggedGrain->next = mPlayGrain;
+			mPlayGrain = triggedGrain;
+		}
+	}
 
 	GrainStruct * grain = mPlayGrain;
 	GrainStruct * prev = NULL;
 
-	DEBUG_GRAIN(0, grain);
+	ZERO_COUNT();
 
-	//Start grain DSP.
+	//Start DSP.
 	while (grain != NULL)
 	{
 		//Fetch grain parameter if grain is new.
 		if (grain->state == GRAIN_AVAILABLE)
 		{
-			DEBUG_GRAIN(10, grain);
 			mGrainParam.resive(*grain);
 			grain->state = GRAIN_TRIG;
 		}
 
+		DEBUG_GRAIN(0, grain);
+
 		setBlock(out, grain);
 
-		if (grain->state == GRAIN_ENDED)
+		if (grain->state == GRAIN_HAS_ENDED)
 		{
-
-			//No overlaps => reuse in next iteration.
-			if (mPlayGrain == grain && grain->next == NULL)
-			{
-				grain->state = GRAIN_AVAILABLE;
-				continue;
-			}
-			freeGrain(grain, prev);
+			grain = freeGrain(grain, prev);
 		} //if: grain has been played, free the grain.
 		else
 		{
-			//synchronus mode
-			if (grain->sizePos > grain->size && (!grain->next))
-			{
-				grain->next = getFreeGrain();
-			}
+			DEBUG_ADD_GRAIN(grain);
+			DEBUG_GRAIN(1, grain);
+
 			prev = grain;
 			grain = grain->next;
 		}
@@ -286,4 +295,6 @@ AudioEffectGrainer::AudioEffectGrainer() :
 	}
 	mFreeGrain = &(mGrains[0]);
 	mPlayGrain = NULL;
+
+	mTriggCount = 0;
 }

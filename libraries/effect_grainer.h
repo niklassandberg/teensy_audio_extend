@@ -49,7 +49,7 @@ extern const int16_t AudioWindowTukey256[];
 
 #define GRAIN_PLAYING 16
 #define GRAIN_AVAILABLE 1
-#define GRAIN_ENDED 32
+#define GRAIN_HAS_ENDED 32
 #define GRAIN_TRIG 4
 #define GRAIN_OVERLAP 8
 
@@ -57,12 +57,14 @@ extern const int16_t AudioWindowTukey256[];
 static constexpr float MS_TO_BLOCK_SCALE =
 		(AUDIO_SAMPLE_RATE_EXACT) / (AUDIO_BLOCK_SAMPLES * 1000.0);
 
-inline __attribute__((always_inline)) uint16_t ms2block(float ms)
+inline __attribute__((always_inline)) uint32_t ms2block(float ms)
 {
 	return ms * MS_TO_BLOCK_SCALE +.5;
 }
 
 //For debug
+#define ITER_TEST 0
+
 #define PRINT_GRAIN 0
 #define DEBUG_GRAIN_PRINT_DELAY_MEMBERS 0
 #define DEBUG_GRAIN_PRINT_DELAY 0
@@ -193,7 +195,26 @@ class AudioEffectGrainer : public AudioStream
 {
 private:
 
-	void setBlock(audio_block_struct * out, GrainStruct* pGrain);
+#if ITER_TEST
+	int countTest = 1;
+	void ZERO_COUNT() { countTest = 1; }
+	void DEBUG_ADD_GRAIN(GrainStruct * grain)
+	{
+		Serial.print("added grain, iter(");
+		Serial.print(countTest++, DEC);
+		Serial.print("), grain(");
+		Serial.print((size_t) (grain), HEX);
+		Serial.print(", next: ");
+		Serial.println((size_t) (grain->next), HEX);
+		++countTest; \
+	}
+#else
+	#define ZERO_COUNT() {}
+	#define DEBUG_ADD_GRAIN(grain) {}
+#endif
+
+	uint32_t mTriggCount;
+	uint32_t mTriggGrain;
 
 	GrainStruct * mPlayGrain;
 	GrainStruct * mFreeGrain;
@@ -208,10 +229,10 @@ private:
 
 	const int16_t * mWindow;
 
-	GrainStruct * getFreeGrain();
+	void setBlock(audio_block_struct * out, GrainStruct* pGrain);
 
-	void freeGrain(GrainStruct*& grain, GrainStruct* prev);
-
+	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
+	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
 
 public:
 
@@ -221,11 +242,13 @@ public:
 
 	virtual void update(void);
 
-	void queueLength(uint16_t l);
-	//void numberOfGrains(uint8_t n);
 	void freezer(bool f);
 	GrainParameter * next();
 	void grainFreeze(bool f);
+
+	//void numberOfGrains(uint8_t n);
+	void queueLength(uint16_t l);
+	void interval(float ms);
 };
 
 #endif /* EFFECT_PITCHSHIFTER_H_2_ */
