@@ -141,21 +141,21 @@ struct AudioInputBuffer
 
 class GrainParameter {
 public:
-	const AudioInputBuffer * queue;
-	GrainStruct resi;
-	GrainStruct sender;
-	bool resiving;
+	const AudioInputBuffer * mAudioBuffer;
+	GrainStruct mResiver;
+	GrainStruct mSender;
+	bool mResiving;
 	GrainParameter()
 	{
 		delay(10); Serial.println("GrainParameter: created!!!!");
-		resiving = false;
-		sender.state = GRAIN_TRIG;
-		queue = NULL;
+		mResiving = false;
+		mSender.state = GRAIN_TRIG;
+		mAudioBuffer = NULL;
 	}
 
 	void init(AudioInputBuffer * aib)
 	{
-		queue = aib;
+		mAudioBuffer = aib;
 	}
 
 	void pitch(float p);
@@ -168,24 +168,24 @@ public:
 	bool send()
 	{
 		//TODO: that about polling in teensy or interrupts?
-		if(resiving) return false;
-		resi = sender;
+		if(mResiving) return false;
+		mResiver = mSender;
 		return true;
 	}
 
 	void resive(GrainStruct & g)
 	{
-		resiving = true;
-		g.size = resi.size;
-		g.start = resi.start;
+		mResiving = true;
+		g.size = mResiver.size;
+		g.start = mResiver.start;
 		g.state = GRAIN_TRIG;
 		g.sizePos = 0;
-		g.magnitude = resi.magnitude;
-		resiving = false;
+		g.magnitude = mResiver.magnitude;
+		mResiving = false;
 	}
 private:
 
-	GrainParameter( const GrainParameter& other ) : queue(other.queue) {} // non construction-copyable
+	GrainParameter( const GrainParameter& other ) : mAudioBuffer(other.mAudioBuffer) {} // non construction-copyable
 	GrainParameter& operator=( const GrainParameter& ){} // non copyable
 };
 
@@ -195,18 +195,22 @@ private:
 
 	void setBlock(audio_block_struct * out, GrainStruct* pGrain);
 
-	GrainStruct * playGrain;
-	GrainStruct * freeGrain;
+	GrainStruct * mPlayGrain;
+	GrainStruct * mFreeGrain;
 
-	AudioInputBuffer audioBuffer;
+	AudioInputBuffer mAudioBuffer;
 
-	audio_block_t *inputQueueArray[1];
+	audio_block_t * mInputQueueArray[1];
 
-	GrainStruct grains[GRAINS_MAX_NUM];
+	GrainStruct mGrains[GRAINS_MAX_NUM];
 
-	GrainParameter grainParam;
+	GrainParameter mGrainParam;
 
-	const int16_t * window;
+	const int16_t * mWindow;
+
+	GrainStruct * getFreeGrain();
+
+	void freeGrain(GrainStruct*& grain, GrainStruct* prev);
 
 
 public:

@@ -7,18 +7,21 @@
 
 #include "effect_grainer.h"
 
-bool AudioEffectGrainer::fillAudioBuffer() {
-	if (audioBuffer.freeze)
+bool AudioEffectGrainer::fillAudioBuffer()
+{
+	if (mAudioBuffer.freeze)
 		return true;
-	uint16_t head = audioBuffer.head;
-	uint16_t tail = audioBuffer.tail;
-	uint16_t len = audioBuffer.len;
-	audio_block_struct ** data = audioBuffer.data;
+	uint16_t head = mAudioBuffer.head;
+	uint16_t tail = mAudioBuffer.tail;
+	uint16_t len = mAudioBuffer.len;
+	audio_block_struct ** data = mAudioBuffer.data;
 
 	if (++head >= len)
 		head = 0;
-	if (head == tail) {
-		if (data[tail] != NULL) {
+	if (head == tail)
+	{
+		if (data[tail] != NULL)
+		{
 			release(data[tail]);
 			data[tail] = NULL;
 		}
@@ -29,74 +32,87 @@ bool AudioEffectGrainer::fillAudioBuffer() {
 	if (!data[head])
 		return false;
 
-	audioBuffer.head = head;
-	audioBuffer.tail = tail;
+	mAudioBuffer.head = head;
+	mAudioBuffer.tail = tail;
 
 	//queue needs to be full before dsp
 	if (head == 0)
-		audioBuffer.isFilled = true;
+		mAudioBuffer.isFilled = true;
 
-	return audioBuffer.isFilled;
+	return mAudioBuffer.isFilled;
 }
 
-void GrainParameter::pitch(float p) {
+void GrainParameter::pitch(float p)
+{
 	if (p > 1.0)
 		p = 1.0;
 	//TODO: IMPL!!!
 }
 
-void GrainParameter::durration(float ms) {
+void GrainParameter::durration(float ms)
+{
 	uint16_t blocks = ms2block(ms);
 	if (blocks < 2)
 		blocks = 2;
-	else if (blocks > queue->len - 1)
-		blocks = queue->len - 1;
-	if (sender.fade > blocks)
-		sender.fade = blocks;
-	sender.size = blocks;
+	else if (blocks > mAudioBuffer->len - 1)
+		blocks = mAudioBuffer->len - 1;
+	if (mSender.fade > blocks)
+		mSender.fade = blocks;
+	mSender.size = blocks;
 }
 
-void GrainParameter::pos(float ms) {
+void GrainParameter::pos(float ms)
+{
 	uint16_t blocks = ms2block(ms);
-	if (blocks > queue->len - 1)
-		blocks = queue->len - 1;
-	sender.start = blocks;
+	if (blocks > mAudioBuffer->len - 1)
+		blocks = mAudioBuffer->len - 1;
+	mSender.start = blocks;
 }
 
-void GrainParameter::space(float ms) {
+void GrainParameter::space(float ms)
+{
 	uint16_t blocks = ms2block(ms);
-	sender.space = blocks;
+	mSender.space = blocks;
 }
 
-void GrainParameter::fade(float ms) {
+void GrainParameter::fade(float ms)
+{
 	uint16_t blocks = ms2block(ms);
-	if (blocks > sender.size)
-		blocks = sender.size;
-	sender.fade = blocks;
+	if (blocks > mSender.size)
+		blocks = mSender.size;
+	mSender.fade = blocks;
 }
 
-void GrainParameter::amplitude(float n) {
-	if (n < 0) n = 0;
-	else if (n > 1.0) n = 1.0;
-	sender.magnitude = n * 65536.0;
+void GrainParameter::amplitude(float n)
+{
+	if (n < 0)
+		n = 0;
+	else if (n > 1.0)
+		n = 1.0;
+	mSender.magnitude = n * 65536.0;
 }
 
-void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain) {
+void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
+{
 
 	uint16_t blockPos = pGrain->start;
 	uint16_t state = pGrain->state;
 
-	if (state == GRAIN_TRIG) {
-		if (blockPos <= audioBuffer.head)
-			blockPos = audioBuffer.head - blockPos;
+	if (state == GRAIN_TRIG)
+	{
+		if (blockPos <= mAudioBuffer.head)
+			blockPos = mAudioBuffer.head - blockPos;
 		else
-			blockPos = (audioBuffer.len + audioBuffer.head) - blockPos;
+			blockPos = (mAudioBuffer.len + mAudioBuffer.head) - blockPos;
 		state = GRAIN_PLAYING;
-	} else {
+	}
+	else
+	{
 		blockPos = pGrain->pos;
 	}
 
-	if (window != NULL && pGrain->sizePos < (pGrain->size << 1)) {
+	if (mWindow != NULL && pGrain->sizePos < (pGrain->size << 1))
+	{
 
 		uint16_t fadePhaseIncr = (0x8000 / pGrain->size); //TODO: move into GrainStruct
 		uint32_t totalSample = pGrain->sizePos * AUDIO_BLOCK_SAMPLES;
@@ -104,13 +120,14 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 		uint16_t windowSampleOffset = totalSample % ((int32_t) pGrain->size); //TODO: opt!!!
 		windowSampleIndex += (windowSampleOffset != 0);
 
-		audio_block_t * in = audioBuffer.data[blockPos];
+		audio_block_t * in = mAudioBuffer.data[blockPos];
 		int16_t * dst = out->data;
 		const int16_t * inputSrc = in->data;
-		const int16_t * windowSrc = window + windowSampleIndex;
+		const int16_t * windowSrc = mWindow + windowSampleIndex;
 		int16_t * end = dst + AUDIO_BLOCK_SAMPLES;
 
-		while (dst < end) {
+		while (dst < end)
+		{
 			int16_t windowSample;
 
 			if (windowSampleOffset == 0)
@@ -121,11 +138,11 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 			else
 			{
 				int32_t wPrev = *(windowSrc - 1);
-				int32_t w = (windowSampleIndex >= WINDOW_SIZE) ? *window : *windowSrc;
+				int32_t w = (windowSampleIndex >= WINDOW_SIZE) ? *mWindow : *windowSrc;
 				int32_t F = windowSampleOffset * ((int32_t) fadePhaseIncr);
 				int32_t val1 = wPrev * (0x8000 - F);
 				int32_t val2 = w * F;
-				windowSample = signed_saturate_rshift( val1 + val2 , 16, 15);
+				windowSample = signed_saturate_rshift(val1 + val2, 16, 15);
 			}
 
 			if (++windowSampleOffset > pGrain->size - 1)
@@ -133,48 +150,69 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 
 			int32_t inputSample = *inputSrc++;
 			*dst++ += multiply_32x32_rshift32(
-							multiply_16bx16b(inputSample, windowSample),
-					pGrain->magnitude );
+					multiply_16bx16b(inputSample, windowSample),
+					pGrain->magnitude);
 		}
 
-	} else {
+	}
+	else
+	{
 		pGrain->state = GRAIN_ENDED;
 		return;
 	}
 
-	//Over window size. We want overlap!!!
-	if (pGrain->sizePos >= pGrain->size) {
-		state |= GRAIN_OVERLAP;
-	}
-
 	//update grain to next block set.
-	blockPos = (1 + blockPos) % audioBuffer.len;
+	blockPos = (1 + blockPos) % mAudioBuffer.len;
 	pGrain->pos = blockPos;
 	pGrain->sizePos += 1;
 	pGrain->state = state;
 }
 
-void AudioEffectGrainer::update() {
+GrainStruct * AudioEffectGrainer::getFreeGrain()
+{
+	GrainStruct * grain = mFreeGrain;
+	if (grain == NULL)
+		return NULL;
+	mFreeGrain = mFreeGrain->next;
+	grain->next = NULL;
+	grain->state = GRAIN_AVAILABLE;
+	return grain;
+}
+
+void AudioEffectGrainer::freeGrain(GrainStruct*& grain, GrainStruct* prev)
+{
+	GrainStruct* free = grain;
+	if (mPlayGrain == grain)
+		grain = mPlayGrain = grain->next;
+	else if (prev != NULL)
+		grain = prev->next = grain->next;
+	else
+		grain = grain->next;
+
+	free->next = mFreeGrain;
+	free->state = GRAIN_AVAILABLE;
+	mFreeGrain = free;
+}
+
+void AudioEffectGrainer::update()
+{
 	//Wait until audio buffer is full.
-	if (!fillAudioBuffer()) return;
+	if (!fillAudioBuffer())
+		return;
 	//Allocate output data.
 	audio_block_t * out = AudioStream::allocate();
-	if (!out) return;
+	if (!out)
+		return;
 	memset(out->data, 0, sizeof(out->data));
 
 	//Get next free grain if no grains is playing.
-	if ( (! playGrain ) && freeGrain) {
-		playGrain = freeGrain;
-		freeGrain = freeGrain->next;
-		playGrain->next = NULL;
-		//TODO: WHY DO WE NEED TO DO THIS!!!!
-		playGrain->state = GRAIN_AVAILABLE;
-	}
+	if (!mPlayGrain)
+		mPlayGrain = getFreeGrain();
 
-	GrainStruct * grain = playGrain;
+	GrainStruct * grain = mPlayGrain;
 	GrainStruct * prev = NULL;
 
-	DEBUG_GRAIN(0,grain);
+	DEBUG_GRAIN(0, grain);
 
 	//Start grain DSP.
 	while (grain != NULL)
@@ -182,46 +220,30 @@ void AudioEffectGrainer::update() {
 		//Fetch grain parameter if grain is new.
 		if (grain->state == GRAIN_AVAILABLE)
 		{
-			DEBUG_GRAIN(10,grain);
-			grainParam.resive(*grain);
+			DEBUG_GRAIN(10, grain);
+			mGrainParam.resive(*grain);
 			grain->state = GRAIN_TRIG;
 		}
 
 		setBlock(out, grain);
 
-		if (grain->state == GRAIN_ENDED) {
-
-			DEBUG_GRAIN(1,grain);
+		if (grain->state == GRAIN_ENDED)
+		{
 
 			//No overlaps => reuse in next iteration.
-			if (playGrain == grain && grain->next == NULL) {
+			if (mPlayGrain == grain && grain->next == NULL)
+			{
 				grain->state = GRAIN_AVAILABLE;
 				continue;
 			}
-
-			GrainStruct * free = grain;
-
-			if (playGrain == grain) grain = playGrain = grain->next;
-			else if (prev != NULL) grain = prev->next = grain->next;
-			else grain = grain->next;
-
-			free->next = freeGrain;
-			free->state = GRAIN_AVAILABLE;
-			freeGrain = free;
-
-		}
-		else {
-
-			DEBUG_GRAIN(2,grain);
-
-			if( ( grain->state & GRAIN_OVERLAP ) && (! grain->next) && freeGrain )
+			freeGrain(grain, prev);
+		} //if: grain has been played, free the grain.
+		else
+		{
+			//synchronus mode
+			if (grain->sizePos > grain->size && (!grain->next))
 			{
-				DEBUG_GRAIN(3,grain);
-				GrainStruct * overlapGrain = freeGrain;
-				freeGrain = freeGrain->next;
-				overlapGrain->next = NULL;
-				overlapGrain->state = GRAIN_AVAILABLE;
-				grain->next = overlapGrain;
+				grain->next = getFreeGrain();
 			}
 			prev = grain;
 			grain = grain->next;
@@ -232,31 +254,36 @@ void AudioEffectGrainer::update() {
 	release(out);
 }
 
-void AudioEffectGrainer::queueLength(uint16_t l) {
+void AudioEffectGrainer::queueLength(uint16_t l)
+{
 	if (l > GRAIN_BLOCK_QUEUE_SIZE)
-		audioBuffer.len = GRAIN_BLOCK_QUEUE_SIZE;
+		mAudioBuffer.len = GRAIN_BLOCK_QUEUE_SIZE;
 	else
-		audioBuffer.len = l;
+		mAudioBuffer.len = l;
 }
 
-void AudioEffectGrainer::freezer(bool f) {
-	audioBuffer.freeze = f;
+void AudioEffectGrainer::freezer(bool f)
+{
+	mAudioBuffer.freeze = f;
 }
 
-GrainParameter * AudioEffectGrainer::next() {
-	grainParam.init(&audioBuffer);
-	return &grainParam;
+GrainParameter * AudioEffectGrainer::next()
+{
+	mGrainParam.init(&mAudioBuffer);
+	return &mGrainParam;
 }
 
 AudioEffectGrainer::AudioEffectGrainer() :
-		AudioStream(1, inputQueueArray), window(AudioWindowHamming256) {
+		AudioStream(1, mInputQueueArray), mWindow(AudioWindowHamming256)
+{
 	int i = GRAINS_MAX_NUM - 1;
-	grains[i].next = NULL;
-	grains[i].state = GRAIN_AVAILABLE;
-	for (; i > 0; --i) {
-		grains[i - 1].next = &(grains[i]);
-		grains[i].state = GRAIN_AVAILABLE;
+	mGrains[i].next = NULL;
+	mGrains[i].state = GRAIN_AVAILABLE;
+	for (; i > 0; --i)
+	{
+		mGrains[i - 1].next = &(mGrains[i]);
+		mGrains[i].state = GRAIN_AVAILABLE;
 	}
-	freeGrain = &(grains[0]);
-	playGrain = NULL;
+	mFreeGrain = &(mGrains[0]);
+	mPlayGrain = NULL;
 }
