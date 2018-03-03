@@ -229,7 +229,7 @@ void AudioEffectGrainer::update()
 	GrainStruct * grain = mPlayGrain;
 	GrainStruct * prev = NULL;
 
-	ZERO_COUNT();
+	DEBUG_TRIG_ITER_ZERO_COUNT();
 
 	//Start DSP.
 	while (grain != NULL)
@@ -241,7 +241,7 @@ void AudioEffectGrainer::update()
 			grain->state = GRAIN_TRIG;
 		}
 
-		DEBUG_GRAIN(0, grain);
+		DEBUG_PRINT_GRAIN(0, grain);
 
 		setBlock(out, grain);
 
@@ -251,8 +251,8 @@ void AudioEffectGrainer::update()
 		} //if: grain has been played, free the grain.
 		else
 		{
-			DEBUG_ADD_GRAIN(grain);
-			DEBUG_GRAIN(1, grain);
+			DEBUG_TRIG_ITER_ADD_GRAIN(grain);
+			DEBUG_PRINT_GRAIN(1, grain);
 
 			prev = grain;
 			grain = grain->next;

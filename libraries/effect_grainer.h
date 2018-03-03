@@ -63,11 +63,11 @@ inline __attribute__((always_inline)) uint32_t ms2block(float ms)
 }
 
 //For debug
-#define ITER_TEST 0
+#define DEBUG_TRIG_ITER_MODE 0
+#define DEBUG_PRINT_GRAIN_MODE 0
 
-#define PRINT_GRAIN 0
-#define DEBUG_GRAIN_PRINT_DELAY_MEMBERS 0
-#define DEBUG_GRAIN_PRINT_DELAY 0
+#define DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS 0
+#define DEBUG_PRINT_GRAIN_DELAY 0
 
 struct GrainStruct
 {
@@ -84,32 +84,32 @@ struct GrainStruct
 	GrainStruct * next = NULL;
 
 #if PRINT_GRAIN
-	#define DEBUG_GRAIN(N,G) { if(G) (G)->print(N); }
+	#define DEBUG_PRINT_GRAIN(N,G) { if(G) (G)->print(N); }
 	void print(uint32_t index)
 	{
-		delay(DEBUG_GRAIN_PRINT_DELAY);
+		delay(DEBUG_PRINT_GRAIN_DELAY);
 		Serial.print(index, DEC);
 		Serial.print(": GrainStruct(");
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" state:");
 		Serial.print(state, DEC);
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , size:");
 		Serial.print(size, DEC);
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , sizePos:");
 		Serial.print(sizePos, DEC);
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , this:");
 		Serial.print((size_t) this, HEX);
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , next:");
 		Serial.print((size_t) next, HEX);
 		Serial.println(" )");
-		delay(DEBUG_GRAIN_PRINT_DELAY_MEMBERS);
+		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 	}
 #else
-	#define DEBUG_GRAIN(G,N) {}
+	#define DEBUG_PRINT_GRAIN(G,N) {}
 	void print(uint8_t index) {}
 #endif
 
@@ -195,10 +195,10 @@ class AudioEffectGrainer : public AudioStream
 {
 private:
 
-#if ITER_TEST
+#if DEBUG_TRIG_ITER_MODE
 	int countTest = 1;
-	void ZERO_COUNT() { countTest = 1; }
-	void DEBUG_ADD_GRAIN(GrainStruct * grain)
+	void DEBUG_TRIG_ITER_ZERO_COUNT() { countTest = 1; }
+	void DEBUG_TRIG_ITER_ADD_GRAIN(GrainStruct * grain)
 	{
 		Serial.print("added grain, iter(");
 		Serial.print(countTest++, DEC);
@@ -209,8 +209,8 @@ private:
 		++countTest; \
 	}
 #else
-	#define ZERO_COUNT() {}
-	#define DEBUG_ADD_GRAIN(grain) {}
+	#define DEBUG_TRIG_ITER_ZERO_COUNT() {}
+	#define DEBUG_TRIG_ITER_ADD_GRAIN(grain) {}
 #endif
 
 	uint32_t mTriggCount;
