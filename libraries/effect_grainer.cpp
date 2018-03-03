@@ -52,8 +52,8 @@ void GrainParameter::pitch(float p)
 void GrainParameter::durration(float ms)
 {
 	uint16_t blocks = ms2block(ms);
-	if (blocks < 2)
-		blocks = 2;
+	if (blocks < 1)
+		blocks = 1;
 	else if (blocks > mAudioBuffer->len - 1)
 		blocks = mAudioBuffer->len - 1;
 	if (mSender.fade > blocks)
