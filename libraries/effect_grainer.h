@@ -49,18 +49,11 @@ extern const int16_t AudioWindowTukey256[];
 
 #define GRAIN_PLAYING 16
 #define GRAIN_AVAILABLE 1
-#define GRAIN_HAS_ENDED 32
+#define GRAIN_HAD_ENDED 32
 #define GRAIN_TRIG 4
 #define GRAIN_OVERLAP 8
 
 
-static constexpr float MS_TO_BLOCK_SCALE =
-		(AUDIO_SAMPLE_RATE_EXACT) / (AUDIO_BLOCK_SAMPLES * 1000.0);
-
-inline __attribute__((always_inline)) uint32_t ms2block(float ms)
-{
-	return ms * MS_TO_BLOCK_SCALE +.5;
-}
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -69,19 +62,41 @@ inline __attribute__((always_inline)) uint32_t ms2block(float ms)
 #define DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS 0
 #define DEBUG_PRINT_GRAIN_DELAY 0
 
+static constexpr float MS_TO_BLOCK_SCALE =
+		(AUDIO_SAMPLE_RATE_EXACT) / (float(AUDIO_BLOCK_SAMPLES) * 1000.0);
+static constexpr float BLOCK_TO_MS_SCALE =
+		(float(AUDIO_BLOCK_SAMPLES) * 1000.0) / (AUDIO_SAMPLE_RATE_EXACT);
+
+inline __attribute__((always_inline)) uint32_t ms2block(float ms)
+{
+	return ms * float(MS_TO_BLOCK_SCALE) +.5;
+}
+
+inline __attribute__((always_inline)) float block2ms(uint32_t blocks)
+{
+	return float(blocks) * BLOCK_TO_MS_SCALE;
+}
+
+
 struct GrainStruct
 {
 	uint16_t start = 0; //grain first position relative to head.
 	uint16_t pos = 0; //next grain position in queue.
 	uint16_t space = 0; //space between duration.
 	uint16_t size = 50; //grain size in blocks
-	int32_t magnitude = 1073741824;
+	int32_t magnitude[4];
 	uint16_t sizePos = 0; //how many blocks have been played from start.
 	uint16_t fade = 0;
 
 	uint8_t state = GRAIN_AVAILABLE;
 
 	GrainStruct * next = NULL;
+
+	GrainStruct()
+	{
+		for (uint8_t ch = 0; ch < 4; ++ch)
+			magnitude[ch] = 0;
+	}
 
 #if PRINT_GRAIN
 	#define DEBUG_PRINT_GRAIN(N,G) { if(G) (G)->print(N); }
@@ -165,7 +180,7 @@ public:
 	void pos(float ms);
 	void space(float ms);
 	void fade(float ms);
-	void amplitude(float n);
+	void amplitude(uint8_t ch, float n);
 
 	bool send()
 	{
@@ -182,13 +197,15 @@ public:
 		g.start = mResiver.start;
 		g.state = GRAIN_TRIG;
 		g.sizePos = 0;
-		g.magnitude = mResiver.magnitude;
+		for ( uint8_t ch = 0; ch < 3; ++ch )
+			g.magnitude[ch] = mResiver.magnitude[ch];
+
 		mResiving = false;
 	}
 private:
 
-	GrainParameter( const GrainParameter& other ) : mAudioBuffer(other.mAudioBuffer) {} // non construction-copyable
-	GrainParameter& operator=( const GrainParameter& ){} // non copyable
+	GrainParameter( const GrainParameter& other ); // non construction-copyable
+	GrainParameter& operator=( const GrainParameter& grain); // non copyable
 };
 
 class AudioEffectGrainer : public AudioStream
@@ -225,14 +242,20 @@ private:
 
 	GrainStruct mGrains[GRAINS_MAX_NUM];
 
+	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
+
 	GrainParameter mGrainParam;
 
 	const int16_t * mWindow;
 
-	void setBlock(audio_block_struct * out, GrainStruct* pGrain);
+	void setGrainBlock(GrainStruct* pGrain);
 
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
 	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
+
+	bool allocateOutputs(audio_block_t* out[4]);
+	void setOutputs(audio_block_t* out[4], GrainStruct* grain);
+	void transmitOutputs(audio_block_t* out[4]);
 
 public:
 
@@ -249,6 +272,10 @@ public:
 	//void numberOfGrains(uint8_t n);
 	void queueLength(uint16_t l);
 	void interval(float ms);
+
+	float bufferMS();
+
+	uint32_t bufferBlockSize() { mAudioBuffer.len;}
 };
 
 #endif /* EFFECT_PITCHSHIFTER_H_2_ */

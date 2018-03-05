@@ -83,13 +83,14 @@ void GrainParameter::fade(float ms)
 	mSender.fade = blocks;
 }
 
-void GrainParameter::amplitude(float n)
+void GrainParameter::amplitude(uint8_t ch, float n)
 {
 	if (n < 0)
 		n = 0;
 	else if (n > 1.0)
 		n = 1.0;
-	mSender.magnitude = n * 65536.0;
+	if(ch>3) ch = 3;
+	mSender.magnitude[ch] = n * 65536.0;
 }
 
 
@@ -101,9 +102,8 @@ void AudioEffectGrainer::interval(float ms)
 	mTriggGrain = blocks;
 }
 
-void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
+void AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 {
-
 	uint16_t blockPos = pGrain->start;
 	uint16_t state = pGrain->state;
 
@@ -122,7 +122,6 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 
 	if (mWindow != NULL && pGrain->sizePos < (pGrain->size << 1))
 	{
-
 		uint16_t fadePhaseIncr = (0x8000 / pGrain->size); //TODO: move into GrainStruct
 		uint32_t totalSample = pGrain->sizePos * AUDIO_BLOCK_SAMPLES;
 		uint16_t windowSampleIndex = totalSample / ((int32_t) pGrain->size); //TODO: opt!!!
@@ -130,10 +129,12 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 		windowSampleIndex += (windowSampleOffset != 0);
 
 		audio_block_t * in = mAudioBuffer.data[blockPos];
-		int16_t * dst = out->data;
+
 		const int16_t * inputSrc = in->data;
 		const int16_t * windowSrc = mWindow + windowSampleIndex;
-		int16_t * end = dst + AUDIO_BLOCK_SAMPLES;
+
+		int32_t * dst = mGrainBlock;
+		int32_t * end = dst + AUDIO_BLOCK_SAMPLES;
 
 		while (dst < end)
 		{
@@ -158,15 +159,13 @@ void AudioEffectGrainer::setBlock(audio_block_struct * out, GrainStruct* pGrain)
 				windowSampleOffset = 0;
 
 			int32_t inputSample = *inputSrc++;
-			*dst++ += multiply_32x32_rshift32(
-					multiply_16bx16b(inputSample, windowSample),
-					pGrain->magnitude);
-		}
 
+			*dst++ = multiply_16bx16b(inputSample, windowSample);
+		}
 	}
 	else
 	{
-		pGrain->state = GRAIN_HAS_ENDED;
+		pGrain->state = GRAIN_HAD_ENDED;
 		return;
 	}
 
@@ -204,16 +203,62 @@ GrainStruct* AudioEffectGrainer::freeGrain(GrainStruct * grain, GrainStruct* pre
 		return grain;
 	}
 
+bool AudioEffectGrainer::allocateOutputs(audio_block_t* outs[4])
+{
+	//Allocate output data.
+	for (uint8_t ch = 0; ch < 4; ++ch)
+	{
+		//TODO: disable functionality
+		audio_block_t* out = AudioStream::allocate();
+		if ( !out )
+		{
+			for (uint8_t i = 0; i < ch; ++i)
+			{
+				out = outs[i];
+				if(out) release(out);
+				outs[i] = NULL;
+			}
+			return false;
+		}
+		memset(out->data, 0, sizeof(out->data));
+		outs[ch] = out;
+	}
+	return true;
+}
+
+void AudioEffectGrainer::setOutputs(audio_block_t* outs[4], GrainStruct* grain)
+{
+	for (uint8_t ch = 0; ch < 4; ++ch)
+	{
+		if (outs[ch] == NULL || grain->magnitude[ch] == 0)
+			continue;
+
+		int32_t* src = mGrainBlock;
+		int16_t* dst = outs[ch]->data;
+		int16_t* end = dst + AUDIO_BLOCK_SAMPLES;
+		while (dst < end)
+		{
+			*dst++ += multiply_32x32_rshift32(*src++, grain->magnitude[ch]);
+		}
+	}
+}
+
+void AudioEffectGrainer::transmitOutputs(audio_block_t* outs[4])
+{
+	for (uint8_t ch = 0; ch < 4; ++ch)
+	{
+		if (outs[ch] == NULL)
+			continue;
+
+		transmit(outs[ch],ch);
+		release(outs[ch]);
+	}
+}
+
 void AudioEffectGrainer::update()
 {
 	//Wait until audio buffer is full.
-	if (!fillAudioBuffer())
-		return;
-
-	//Allocate output data.
-	audio_block_t * out = AudioStream::allocate();
-	if (!out) return;
-	memset(out->data, 0, sizeof(out->data));
+	if (!fillAudioBuffer()) return;
 
 	if( ++mTriggCount >= mTriggGrain )
 	{
@@ -231,6 +276,15 @@ void AudioEffectGrainer::update()
 
 	DEBUG_TRIG_ITER_ZERO_COUNT();
 
+	audio_block_t * outs[4];
+	for(uint8_t ch = 0 ; ch < 4 ; ++ch)
+		outs[ch] = NULL;
+
+	if( grain != NULL )
+	{
+		if( ! allocateOutputs(outs) ) return;
+	}
+
 	//Start DSP.
 	while (grain != NULL)
 	{
@@ -243,9 +297,9 @@ void AudioEffectGrainer::update()
 
 		DEBUG_PRINT_GRAIN(0, grain);
 
-		setBlock(out, grain);
+		setGrainBlock(grain);
 
-		if (grain->state == GRAIN_HAS_ENDED)
+		if (grain->state == GRAIN_HAD_ENDED)
 		{
 			grain = freeGrain(grain, prev);
 		} //if: grain has been played, free the grain.
@@ -254,13 +308,28 @@ void AudioEffectGrainer::update()
 			DEBUG_TRIG_ITER_ADD_GRAIN(grain);
 			DEBUG_PRINT_GRAIN(1, grain);
 
+//			setOutputs(outs, grain);
+			for (uint8_t ch = 0; ch < 4; ++ch)
+			{
+				if (outs[ch] == NULL || grain->magnitude[ch] == 0)
+					continue;
+
+				int32_t* src = mGrainBlock;
+				int16_t* dst = outs[ch]->data;
+				int16_t* end = dst + AUDIO_BLOCK_SAMPLES;
+				while (dst < end)
+				{
+					*dst++ += multiply_32x32_rshift32(*src++, grain->magnitude[ch]);
+				}
+			}
+
 			prev = grain;
 			grain = grain->next;
 		}
 	}
 
-	transmit(out);
-	release(out);
+	transmitOutputs(outs);
+
 }
 
 void AudioEffectGrainer::queueLength(uint16_t l)
@@ -274,6 +343,11 @@ void AudioEffectGrainer::queueLength(uint16_t l)
 void AudioEffectGrainer::freezer(bool f)
 {
 	mAudioBuffer.freeze = f;
+}
+
+float AudioEffectGrainer::bufferMS()
+{
+	return block2ms(mAudioBuffer.len);
 }
 
 GrainParameter * AudioEffectGrainer::next()
