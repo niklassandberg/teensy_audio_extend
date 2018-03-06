@@ -49,9 +49,8 @@ extern const int16_t AudioWindowTukey256[];
 
 #define GRAIN_PLAYING 16
 #define GRAIN_AVAILABLE 1
-#define GRAIN_HAD_ENDED 32
-#define GRAIN_TRIG 4
-#define GRAIN_OVERLAP 8
+//#define GRAIN_TRIG 4
+//#define GRAIN_OVERLAP 8
 
 
 
@@ -82,11 +81,14 @@ struct GrainStruct
 {
 	uint16_t start = 0; //grain first position relative to head.
 	uint16_t pos = 0; //next grain position in queue.
-	uint16_t space = 0; //space between duration.
 	uint16_t size = 50; //grain size in blocks
 	int32_t magnitude[4];
-	uint16_t sizePos = 0; //how many blocks have been played from start.
-	uint16_t fade = 0;
+	//how many blocks have been played from start.
+	//Zero sizePos indicates the start.
+	uint16_t sizePos = 0;
+
+	int32_t window_phase_accumulator;
+	int32_t window_phase_increment;
 
 	uint8_t state = GRAIN_AVAILABLE;
 
@@ -166,7 +168,7 @@ public:
 	{
 		delay(10); Serial.println("GrainParameter: created!!!!");
 		mResiving = false;
-		mSender.state = GRAIN_TRIG;
+		//mSender.state = GRAIN_TRIG;
 		mAudioBuffer = NULL;
 	}
 
@@ -178,8 +180,6 @@ public:
 	void pitch(float p);
 	void durration(float ms);
 	void pos(float ms);
-	void space(float ms);
-	void fade(float ms);
 	void amplitude(uint8_t ch, float n);
 
 	bool send()
@@ -193,10 +193,14 @@ public:
 	void resive(GrainStruct & g)
 	{
 		mResiving = true;
-		g.size = mResiver.size;
 		g.start = mResiver.start;
-		g.state = GRAIN_TRIG;
+		g.window_phase_increment = mResiver.window_phase_increment;
+		g.size = mResiver.size;
 		g.sizePos = 0;
+		g.window_phase_accumulator = 0;
+
+		//g.state = GRAIN_TRIG;
+
 		for ( uint8_t ch = 0; ch < 3; ++ch )
 			g.magnitude[ch] = mResiver.magnitude[ch];
 
@@ -248,7 +252,7 @@ private:
 
 	const int16_t * mWindow;
 
-	void setGrainBlock(GrainStruct* pGrain);
+	bool setGrainBlock(GrainStruct* pGrain);
 
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
 	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
