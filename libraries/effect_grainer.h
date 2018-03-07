@@ -45,14 +45,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 40
-#define GRAINS_MAX_NUM 40
-
-#define GRAIN_PLAYING 16
-#define GRAIN_AVAILABLE 1
-//#define GRAIN_TRIG 4
-//#define GRAIN_OVERLAP 8
-
-
+#define GRAINS_MAX_NUM 20
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -61,14 +54,28 @@ extern const int16_t AudioWindowTukey256[];
 #define DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS 0
 #define DEBUG_PRINT_GRAIN_DELAY 0
 
+static constexpr float MS_TO_SAMPLE_SCALE = AUDIO_SAMPLE_RATE_EXACT / 1000.0;
+
 static constexpr float MS_TO_BLOCK_SCALE =
 		(AUDIO_SAMPLE_RATE_EXACT) / (float(AUDIO_BLOCK_SAMPLES) * 1000.0);
 static constexpr float BLOCK_TO_MS_SCALE =
 		(float(AUDIO_BLOCK_SAMPLES) * 1000.0) / (AUDIO_SAMPLE_RATE_EXACT);
 
+static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
+
+template<int i> struct ShiftOp
+{
+	static const int result = 1 + ShiftOp<(i-1)/2>::result;
+};
+
+template<> struct ShiftOp<0>
+{
+	static const int result = 0;
+};
+
 inline __attribute__((always_inline)) uint32_t ms2block(float ms)
 {
-	return ms * float(MS_TO_BLOCK_SCALE) +.5;
+	return ms * MS_TO_BLOCK_SCALE +.5;
 }
 
 inline __attribute__((always_inline)) float block2ms(uint32_t blocks)
@@ -76,21 +83,39 @@ inline __attribute__((always_inline)) float block2ms(uint32_t blocks)
 	return float(blocks) * BLOCK_TO_MS_SCALE;
 }
 
+inline __attribute__((always_inline)) uint32_t ms2sample(float ms)
+{
+	return MS_TO_SAMPLE_SCALE * ms + .5;
+}
+
+inline __attribute__((always_inline)) uint32_t blockPos(uint32_t samples)
+{
+	return samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+}
+
+inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
+{
+	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+}
+
+
+
 
 struct GrainStruct
 {
-	uint16_t start = 0; //grain first position relative to head.
-	uint16_t pos = 0; //next grain position in queue.
-	uint16_t size = 50; //grain size in blocks
+	uint32_t start = 0; //grain first position relative to head.
+	uint32_t buffSamplePos = 0; //next grain position in queue.
+	uint32_t size = 50; //grain size
 	int32_t magnitude[4];
 	//how many blocks have been played from start.
 	//Zero sizePos indicates the start.
-	uint16_t sizePos = 0;
+	uint32_t sizePos = 0;
 
-	int32_t window_phase_accumulator;
-	int32_t window_phase_increment;
+	uint32_t window_phase_accumulator;
+	uint32_t window_phase_increment;
 
-	uint8_t state = GRAIN_AVAILABLE;
+	uint32_t grain_phase_accumulator;
+	uint32_t grain_phase_increment;
 
 	GrainStruct * next = NULL;
 
@@ -107,9 +132,6 @@ struct GrainStruct
 		delay(DEBUG_PRINT_GRAIN_DELAY);
 		Serial.print(index, DEC);
 		Serial.print(": GrainStruct(");
-		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
-		Serial.print(" state:");
-		Serial.print(state, DEC);
 		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , size:");
 		Serial.print(size, DEC);
@@ -168,7 +190,6 @@ public:
 	{
 		delay(10); Serial.println("GrainParameter: created!!!!");
 		mResiving = false;
-		//mSender.state = GRAIN_TRIG;
 		mAudioBuffer = NULL;
 	}
 
@@ -198,8 +219,6 @@ public:
 		g.size = mResiver.size;
 		g.sizePos = 0;
 		g.window_phase_accumulator = 0;
-
-		//g.state = GRAIN_TRIG;
 
 		for ( uint8_t ch = 0; ch < 3; ++ch )
 			g.magnitude[ch] = mResiver.magnitude[ch];
@@ -257,9 +276,12 @@ private:
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
 	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
 
-	bool allocateOutputs(audio_block_t* out[4]);
-	void setOutputs(audio_block_t* out[4], GrainStruct* grain);
-	void transmitOutputs(audio_block_t* out[4]);
+	inline __attribute__((always_inline))
+		bool allocateOutputs(audio_block_t* out[4]);
+	inline __attribute__((always_inline))
+		void setOutputs(audio_block_t* out[4], GrainStruct* grain);
+	inline __attribute__((always_inline))
+		void transmitOutputs(audio_block_t* out[4]);
 
 public:
 
@@ -278,8 +300,6 @@ public:
 	void interval(float ms);
 
 	float bufferMS();
-
-	uint32_t bufferBlockSize() { mAudioBuffer.len;}
 };
 
 #endif /* EFFECT_PITCHSHIFTER_H_2_ */

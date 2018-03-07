@@ -46,37 +46,43 @@ void GrainParameter::pitch(float p)
 {
 	if (p > 1.0) p = 1.0;
 	else if(p<0.0) p = 0.0;
-
-
 }
 
 void GrainParameter::durration(float ms)
 {
-	uint16_t blocks = ms2block(ms);
-	if (blocks < 1)
-		blocks = 1;
-	else if (blocks > mAudioBuffer->len - 1)
-		blocks = mAudioBuffer->len - 1;
+	float samples = MS_TO_SAMPLE_SCALE * ms;
+	if (samples < (AUDIO_BLOCK_SAMPLES<<1) )
+		samples = AUDIO_BLOCK_SAMPLES<<1;
 
-	mSender.size = blocks;
-	mSender.window_phase_increment = (float(0x1000000) / float(blocks)) + 0.5;
+	mSender.size = samples;
+
+	//1<<24= 0x1000000 = 16777216
+	mSender.window_phase_increment =
+			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
 }
 
 void AudioEffectGrainer::interval(float ms)
 {
-	uint16_t blocks = ms2block(ms);
-	if (blocks < 1)
-		blocks = 1;
+	float samples = MS_TO_SAMPLE_SCALE * ms;
+	if (samples < AUDIO_BLOCK_SAMPLES)
+		samples = AUDIO_BLOCK_SAMPLES + .5;
+	uint16_t blocks = blockPos(samples);
 
 	mTriggGrain = blocks;
 }
 
 void GrainParameter::pos(float ms)
 {
-	uint16_t blocks = ms2block(ms);
-	if (blocks > mAudioBuffer->len - 1)
-		blocks = mAudioBuffer->len - 1;
-	mSender.start = blocks;
+	if(ms<0) ms += block2ms(mAudioBuffer->len);
+
+	float samples = MS_TO_SAMPLE_SCALE * ms +.5;
+	if (blockPos(samples) >= mAudioBuffer->len)
+	{
+		samples -= mAudioBuffer->len
+					<< ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+	}
+
+	mSender.start = samples;
 }
 
 void GrainParameter::amplitude(uint8_t ch, float n)
@@ -91,16 +97,18 @@ void GrainParameter::amplitude(uint8_t ch, float n)
 
 bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 {
-	if (pGrain->sizePos >= (pGrain->size << 1))
+	uint32_t grainPos = pGrain->sizePos;
+	uint32_t grainLen = pGrain->size;
+
+	if (grainPos >= grainLen)
 	{
 		pGrain->sizePos = 0;
 		pGrain->window_phase_accumulator = 0;
 		return false;
 	}
 
-	//Grain variables.
-	uint16_t blockPos = pGrain->start;
-	uint16_t state = pGrain->state;
+	uint32_t sample, sampleIndex;
+
 	//Window variables.
 	int32_t wPh = pGrain->window_phase_accumulator;
 	int32_t wInc = pGrain->window_phase_increment;
@@ -111,24 +119,34 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 	int32_t * end = dst + AUDIO_BLOCK_SAMPLES;
 	int32_t windowSample, inputSample;
 
-	if ( pGrain->sizePos == 0 )
+	if ( grainPos == 0 )
 	{
-		if (blockPos <= mAudioBuffer.head)
-			blockPos = mAudioBuffer.head - blockPos;
+		sample = pGrain->start;
+		uint32_t b = blockPos( sample );
+		sampleIndex = (AUDIO_BLOCK_SAMPLES-1);
+		//move block position relative to head.
+		if (b <= mAudioBuffer.head)
+			b = mAudioBuffer.head - b;
 		else
-			blockPos = (mAudioBuffer.len + mAudioBuffer.head) - blockPos;
-		state = GRAIN_PLAYING;
+			b = (mAudioBuffer.len + mAudioBuffer.head) - b;
+		sample = sampleIndex + samplePos(b);
 	}
 	else
 	{
-		blockPos = pGrain->pos;
+		sample = pGrain->buffSamplePos;
 	}
 
-	audio_block_t * in = mAudioBuffer.data[blockPos];
-	const int16_t * inputSrc = in->data;
+	uint32_t blockIndex = -1;
+	const int16_t * inputSrc;
 
 	while (dst < end)
 	{
+		if( grainPos >= grainLen )
+		{
+			*dst++ = 0;
+			continue;
+		}
+
 		//Window interpolate.
 		wIndex = wPh >> 24;
 		val1 = mWindow[wIndex];
@@ -137,18 +155,37 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		val2 *= wScale;
 		val1 *= 0x10000 - wScale;
 		windowSample = signed_saturate_rshift(val1 + val2, 16, 15);
-		//Audio
-		inputSample = *inputSrc++;
-		*dst++ = multiply_16bx16b(inputSample, windowSample);
 		wPh += wInc;
+
+		//Audio
+		//TODO: when we do simular as window with scale on audio we get
+		//		int32 without sat shift. We then do ul32 >> 32 on res. saves clockcycles!!!
+
+		uint32_t b = blockPos(sample);
+
+		if(blockIndex != b )
+		{
+			if( b >= mAudioBuffer.len)
+			{
+				sample -= samplePos(mAudioBuffer.len);
+				b = blockPos(sample);
+			}
+			blockIndex = b;
+			inputSrc = mAudioBuffer.data[blockIndex]->data;
+		}
+		sampleIndex = sample & (AUDIO_BLOCK_SAMPLES-1);
+		inputSample = inputSrc[sampleIndex];
+
+		//Audio + window
+		*dst++ = multiply_16bx16b(inputSample, windowSample);
+		++sample;
+		++grainPos;
 	}
 
 	//update grain to next block set.
-	blockPos = (1 + blockPos) % mAudioBuffer.len;
-	pGrain->pos = blockPos;
-	pGrain->sizePos += 1;
+	pGrain->buffSamplePos = sample;
+	pGrain->sizePos = grainPos;
 	pGrain->window_phase_accumulator = wPh;
-	pGrain->state = state;
 
 	return true;
 }
@@ -160,7 +197,6 @@ GrainStruct * AudioEffectGrainer::getFreeGrain()
 		return NULL;
 	mFreeGrain = mFreeGrain->next;
 	grain->next = NULL;
-	grain->state = GRAIN_AVAILABLE;
 	return grain;
 }
 
@@ -175,7 +211,6 @@ GrainStruct* AudioEffectGrainer::freeGrain(GrainStruct * grain, GrainStruct* pre
 			grain = grain->next;
 
 		free->next = mFreeGrain;
-		free->state = GRAIN_AVAILABLE;
 		mFreeGrain = free;
 		return grain;
 	}
@@ -243,6 +278,8 @@ void AudioEffectGrainer::update()
 		GrainStruct * triggedGrain = getFreeGrain();
 		if(triggedGrain)
 		{
+			//Fetch grain parameter if grain is new.
+			mGrainParam.resive(*triggedGrain);
 			triggedGrain->next = mPlayGrain;
 			mPlayGrain = triggedGrain;
 		}
@@ -265,15 +302,7 @@ void AudioEffectGrainer::update()
 	//Start DSP.
 	while (grain != NULL)
 	{
-		//Fetch grain parameter if grain is new.
-		if (grain->state == GRAIN_AVAILABLE)
-		{
-			mGrainParam.resive(*grain);
-		}
-
 		DEBUG_PRINT_GRAIN(0, grain);
-
-		//setGrainBlock(grain);
 
 		if ( ! setGrainBlock(grain) )
 		{
@@ -284,21 +313,7 @@ void AudioEffectGrainer::update()
 			DEBUG_TRIG_ITER_ADD_GRAIN(grain);
 			DEBUG_PRINT_GRAIN(1, grain);
 
-//			setOutputs(outs, grain);
-			for (uint8_t ch = 0; ch < 4; ++ch)
-			{
-				if (outs[ch] == NULL || grain->magnitude[ch] == 0)
-					continue;
-
-				int32_t* src = mGrainBlock;
-				int16_t* dst = outs[ch]->data;
-				int16_t* end = dst + AUDIO_BLOCK_SAMPLES;
-				while (dst < end)
-				{
-					*dst++ += multiply_32x32_rshift32(*src++, grain->magnitude[ch]);
-				}
-			}
-
+			setOutputs(outs, grain);
 			prev = grain;
 			grain = grain->next;
 		}
@@ -310,10 +325,16 @@ void AudioEffectGrainer::update()
 
 void AudioEffectGrainer::queueLength(uint16_t l)
 {
+	if(l<1024) l = 1024;
+
 	if (l > GRAIN_BLOCK_QUEUE_SIZE)
+	{
 		mAudioBuffer.len = GRAIN_BLOCK_QUEUE_SIZE;
+	}
 	else
+	{
 		mAudioBuffer.len = l;
+	}
 }
 
 void AudioEffectGrainer::freezer(bool f)
@@ -337,11 +358,9 @@ AudioEffectGrainer::AudioEffectGrainer() :
 {
 	int i = GRAINS_MAX_NUM - 1;
 	mGrains[i].next = NULL;
-	mGrains[i].state = GRAIN_AVAILABLE;
 	for (; i > 0; --i)
 	{
 		mGrains[i - 1].next = &(mGrains[i]);
-		mGrains[i].state = GRAIN_AVAILABLE;
 	}
 	mFreeGrain = &(mGrains[0]);
 	mPlayGrain = NULL;
