@@ -98,7 +98,10 @@ inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
-
+inline __attribute__((always_inline)) uint32_t sampleIndex(uint32_t samples)
+{
+	return samples & (AUDIO_BLOCK_SAMPLES-1);
+}
 
 
 struct GrainStruct

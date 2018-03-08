@@ -50,12 +50,11 @@ void GrainParameter::pitch(float p)
 
 void GrainParameter::durration(float ms)
 {
-	float samples = MS_TO_SAMPLE_SCALE * ms;
+	uint32_t samples = MS_TO_SAMPLE_SCALE * ms;
 	if (samples < (AUDIO_BLOCK_SAMPLES<<1) )
 		samples = AUDIO_BLOCK_SAMPLES<<1;
 
 	mSender.size = samples;
-
 	//1<<24= 0x1000000 = 16777216
 	mSender.window_phase_increment =
 			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
@@ -63,24 +62,18 @@ void GrainParameter::durration(float ms)
 
 void AudioEffectGrainer::interval(float ms)
 {
-	float samples = MS_TO_SAMPLE_SCALE * ms;
+	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
 	if (samples < AUDIO_BLOCK_SAMPLES)
-		samples = AUDIO_BLOCK_SAMPLES + .5;
+		samples = AUDIO_BLOCK_SAMPLES;
 	uint16_t blocks = blockPos(samples);
-
 	mTriggGrain = blocks;
 }
 
 void GrainParameter::pos(float ms)
 {
-	if(ms<0) ms += block2ms(mAudioBuffer->len);
-
-	float samples = MS_TO_SAMPLE_SCALE * ms +.5;
+	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
 	if (blockPos(samples) >= mAudioBuffer->len)
-	{
-		samples -= mAudioBuffer->len
-					<< ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
-	}
+		samples = samplePos(mAudioBuffer->len) - 1;
 
 	mSender.start = samples;
 }
@@ -99,6 +92,7 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 {
 	uint32_t grainPos = pGrain->sizePos;
 	uint32_t grainLen = pGrain->size;
+	uint32_t prevBlock, block;
 
 	if (grainPos >= grainLen)
 	{
@@ -107,37 +101,43 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		return false;
 	}
 
-	uint32_t sample, sampleIndex;
+	uint32_t sample;
 
 	//Window variables.
 	int32_t wPh = pGrain->window_phase_accumulator;
 	int32_t wInc = pGrain->window_phase_increment;
-	uint8_t wIndex = 0;
+	uint8_t wIndex = 0; //need to be uint8_t !!!
 	int32_t val1, val2, wScale;
 	//Out- and Inputs of audio and window.
 	int32_t * dst = mGrainBlock;
 	int32_t * end = dst + AUDIO_BLOCK_SAMPLES;
 	int32_t windowSample, inputSample;
 
+
 	if ( grainPos == 0 )
 	{
+		//set position relative to newly read block.
 		sample = pGrain->start;
-		uint32_t b = blockPos( sample );
-		sampleIndex = (AUDIO_BLOCK_SAMPLES-1);
-		//move block position relative to head.
-		if (b <= mAudioBuffer.head)
-			b = mAudioBuffer.head - b;
+		block = blockPos( sample );
+		uint32_t i = sample & (AUDIO_BLOCK_SAMPLES-1);
+		if (block <= mAudioBuffer.head)
+			block = mAudioBuffer.head - block;
 		else
-			b = (mAudioBuffer.len + mAudioBuffer.head) - b;
-		sample = sampleIndex + samplePos(b);
+			block = (mAudioBuffer.len + mAudioBuffer.head) - block;
+		sample = i + samplePos(block);
+		prevBlock = block;
+		//TODO: TEST1: IT IS NOT THIS!!!
+		//if(sample==0 && block == mAudioBuffer.head) ++sample;
+		//prevBlock = block-1;
 	}
 	else
 	{
 		sample = pGrain->buffSamplePos;
+		block = blockPos(sample);
+		prevBlock = block - 1; //any value prevBlock != block
 	}
 
-	uint32_t blockIndex = -1;
-	const int16_t * inputSrc;
+	const int16_t * inputSrc = mAudioBuffer.data[block]->data;
 
 	while (dst < end)
 	{
@@ -158,28 +158,33 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		wPh += wInc;
 
 		//Audio
-		//TODO: when we do simular as window with scale on audio we get
-		//		int32 without sat shift. We then do ul32 >> 32 on res. saves clockcycles!!!
+		//TODO: when we do similar as window with scale on audio we get
+		//		int32 without sat shift. We then do ul32 >> 32 on res. saves clock cycles!!!
 
-		uint32_t b = blockPos(sample);
-
-		if(blockIndex != b )
+		if(block != prevBlock )
 		{
-			if( b >= mAudioBuffer.len)
+			if( block >= mAudioBuffer.len)
 			{
 				sample -= samplePos(mAudioBuffer.len);
-				b = blockPos(sample);
+				block = blockPos(sample);
 			}
-			blockIndex = b;
-			inputSrc = mAudioBuffer.data[blockIndex]->data;
+			prevBlock = block;
+
+			//TODO: just test
+			if( block > mAudioBuffer.len) block = 0;
+
+			inputSrc = mAudioBuffer.data[block]->data;
 		}
-		sampleIndex = sample & (AUDIO_BLOCK_SAMPLES-1);
-		inputSample = inputSrc[sampleIndex];
+
+		inputSample = inputSrc[sampleIndex(sample)];
 
 		//Audio + window
 		*dst++ = multiply_16bx16b(inputSample, windowSample);
+
+		//next iteration.
 		++sample;
 		++grainPos;
+		block = blockPos(sample);
 	}
 
 	//update grain to next block set.
