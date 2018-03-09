@@ -46,6 +46,7 @@ void GrainParameter::pitch(float p)
 {
 	if (p > 1.0) p = 1.0;
 	else if(p<0.0) p = 0.0;
+	mSender.grain_phase_increment = float(1<<14)*p;
 }
 
 void GrainParameter::durration(float ms)
@@ -107,6 +108,7 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 	//Window variables.
 	int32_t wPh = pGrain->window_phase_accumulator;
 	int32_t wInc = pGrain->window_phase_increment;
+	int32_t grInc = pGrain->grain_phase_increment;
 	uint8_t wIndex = 0; //need to be uint8_t !!!
 	int32_t val1, val2, wScale;
 	//Out- and Inputs of audio and window.
@@ -126,6 +128,7 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		else
 			block = (mAudioBuffer.len + mAudioBuffer.head) - block;
 		sample = (i<<14) + samplePos(block); //phase==0
+		//sample &= (~0x3FFF); //phase == 0 for sertain.
 		prevBlock = block;
 	}
 	else
@@ -150,9 +153,9 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		val1 = mWindow[wIndex];
 		val2 = mWindow[wIndex+1];
 		wScale = (wPh >> 8) & 0xFFFF;
-		val2 *= wScale;
 		val1 *= 0x10000 - wScale;
-		windowSample = signed_saturate_rshift(val1 + val2, 16, 15);
+		val2 *= wScale;
+		windowSample = val1 + val2;
 		wPh += wInc;
 
 		//Audio
@@ -170,21 +173,43 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 			inputSrc = mAudioBuffer.data[block]->data;
 		}
 
-		inputSample = inputSrc[sampleIndex(sample)];
+		wIndex = sampleIndex(sample);
+		val1 = inputSrc[wIndex];
+		if( ++wIndex >= AUDIO_BLOCK_SAMPLES )
+		{
+			wIndex = 0;
+			++block;
+			if( block >= mAudioBuffer.len)
+			{
+				block = 0;
+			}
+			inputSrc = mAudioBuffer.data[block]->data;
+		}
+		val2 = inputSrc[wIndex];
+
+		wScale = (sample & 0x3FFF) << 2;
+		val1 *= 0x10000 - wScale;
+		val2 *= wScale;
+		inputSample = val1 + val2;
+		sample += grInc;
+
+		//old
+		//val2 = inputSrc[sampleIndex(sample+1)];
 
 		//Audio + window
-		*dst++ = multiply_16bx16b(inputSample, windowSample);
+		*dst++ = multiply_32x32_rshift32(inputSample, windowSample);
+		//*dst++ = multiply_16bx16b(inputSample, windowSample);
 
 		//next iteration.
-		sample += (1<<14);
 		++grainPos;
 		block = blockPos(sample);
 	}
 
 	//update grain to next block set.
 	pGrain->buffSamplePos = sample;
-	pGrain->sizePos = grainPos;
 	pGrain->window_phase_accumulator = wPh;
+
+	pGrain->sizePos = grainPos;
 
 	return true;
 }
