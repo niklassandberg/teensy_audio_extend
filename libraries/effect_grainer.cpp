@@ -44,7 +44,7 @@ bool AudioEffectGrainer::fillAudioBuffer()
 
 void GrainParameter::pitch(float p)
 {
-	if (p > 1.0) p = 1.0;
+	if (p > 2.0) p = 2.0;
 	else if(p<0.0) p = 0.0;
 	//1<<24= 0x1000000 = 16777216
 	mSender.grain_phase_increment = 16777216.0 * p;
@@ -160,7 +160,7 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 
 		//Audio
 
-		if( 16777216 >= grPh )
+		while( 16777216 >= grPh )
 		{
 			grPh -= 16777216;
 			block = blockPos(++sample);
