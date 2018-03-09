@@ -90,18 +90,18 @@ inline __attribute__((always_inline)) uint32_t ms2sample(float ms)
 
 inline __attribute__((always_inline)) uint32_t blockPos(uint32_t samples)
 {
-	return (samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result) >> 14;
+	return samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
 inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 {
 	// Note: sample pos is from 0-127.. now it is 0. therefore 2^16
-	return (block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result) << 14;
+	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
 inline __attribute__((always_inline)) uint32_t sampleIndex(uint32_t samples)
 {
-	return (samples >> 14) & (AUDIO_BLOCK_SAMPLES-1);
+	return samples & (AUDIO_BLOCK_SAMPLES-1);
 }
 
 
@@ -111,14 +111,12 @@ struct GrainStruct
 	uint32_t buffSamplePos = 0; //next grain position in queue.
 	uint32_t size = 50; //grain size
 	int32_t magnitude[4];
-	//how many blocks have been played from start.
-	//Zero sizePos indicates the start.
 	uint32_t sizePos = 0;
 
 	uint32_t window_phase_accumulator;
 	uint32_t window_phase_increment;
 
-	//uint32_t grain_phase_accumulator;
+	uint32_t grain_phase_accumulator;
 	uint32_t grain_phase_increment;
 
 	GrainStruct * next = NULL;
