@@ -90,17 +90,18 @@ inline __attribute__((always_inline)) uint32_t ms2sample(float ms)
 
 inline __attribute__((always_inline)) uint32_t blockPos(uint32_t samples)
 {
-	return samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+	return (samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result) >> 14;
 }
 
 inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 {
-	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+	// Note: sample pos is from 0-127.. now it is 0. therefore 2^16
+	return (block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result) << 14;
 }
 
 inline __attribute__((always_inline)) uint32_t sampleIndex(uint32_t samples)
 {
-	return samples & (AUDIO_BLOCK_SAMPLES-1);
+	return (samples >> 14) & (AUDIO_BLOCK_SAMPLES-1);
 }
 
 
@@ -117,7 +118,7 @@ struct GrainStruct
 	uint32_t window_phase_accumulator;
 	uint32_t window_phase_increment;
 
-	uint32_t grain_phase_accumulator;
+	//uint32_t grain_phase_accumulator;
 	uint32_t grain_phase_increment;
 
 	GrainStruct * next = NULL;
@@ -218,11 +219,11 @@ public:
 	{
 		mResiving = true;
 		g.start = mResiver.start;
+		g.grain_phase_increment = mResiver.grain_phase_increment;
 		g.window_phase_increment = mResiver.window_phase_increment;
 		g.size = mResiver.size;
 		g.sizePos = 0;
 		g.window_phase_accumulator = 0;
-
 		for ( uint8_t ch = 0; ch < 3; ++ch )
 			g.magnitude[ch] = mResiver.magnitude[ch];
 
