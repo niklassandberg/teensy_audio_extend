@@ -160,6 +160,20 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 
 		//Audio
 
+		//TODO: Opt!!!!
+//		if( 0x1000000 >= grPh )
+//		{
+//			uint32_t jmp = grPh >> 24;
+//			grPh -= 0x800000 << jmp;
+//			sample += jmp;
+//			block = blockPos(sample);
+//			if( block >= mAudioBuffer.len)
+//			{
+//				sample -= jmp*samplePos(mAudioBuffer.len);
+//				block = blockPos(sample);
+//			}
+//		}
+
 		while( 16777216 >= grPh )
 		{
 			grPh -= 16777216;
@@ -170,6 +184,8 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 				block = blockPos(sample);
 			}
 		}
+
+
 		inputSrc = mAudioBuffer.data[block]->data;
 
 		wIndex = sampleIndex(sample);
