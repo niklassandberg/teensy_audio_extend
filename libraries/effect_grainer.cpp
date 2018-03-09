@@ -92,7 +92,6 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 {
 	uint32_t grainPos = pGrain->sizePos;
 	uint32_t grainLen = pGrain->size;
-	uint32_t prevBlock, block;
 
 	if (grainPos >= grainLen)
 	{
@@ -102,11 +101,11 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 	}
 
 	uint32_t sample;
-
+	uint16_t prevBlock, block; //block is not sample, therefore smaller
 	//Window variables.
 	int32_t wPh = pGrain->window_phase_accumulator;
 	int32_t wInc = pGrain->window_phase_increment;
-	uint8_t wIndex = 0; //need to be uint8_t !!!
+	uint8_t wIndex = 0; //need to be uint8_t to wrap value at 257.
 	int32_t val1, val2, wScale;
 	//Out- and Inputs of audio and window.
 	int32_t * dst = mGrainBlock;
@@ -126,9 +125,6 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 			block = (mAudioBuffer.len + mAudioBuffer.head) - block;
 		sample = i + samplePos(block);
 		prevBlock = block;
-		//TODO: TEST1: IT IS NOT THIS!!!
-		//if(sample==0 && block == mAudioBuffer.head) ++sample;
-		//prevBlock = block-1;
 	}
 	else
 	{
@@ -169,10 +165,6 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 				block = blockPos(sample);
 			}
 			prevBlock = block;
-
-			//TODO: just test
-			if( block > mAudioBuffer.len) block = 0;
-
 			inputSrc = mAudioBuffer.data[block]->data;
 		}
 
@@ -182,9 +174,8 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 		*dst++ = multiply_16bx16b(inputSample, windowSample);
 
 		//next iteration.
-		++sample;
 		++grainPos;
-		block = blockPos(sample);
+		block = blockPos(++sample);
 	}
 
 	//update grain to next block set.
