@@ -88,7 +88,7 @@ inline __attribute__((always_inline)) uint32_t ms2sample(float ms)
 	return MS_TO_SAMPLE_SCALE * ms + .5;
 }
 
-inline __attribute__((always_inline)) uint32_t blockPos(uint32_t samples)
+inline __attribute__((always_inline)) uint32_t getBlockPosition(uint32_t samples)
 {
 	return samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
@@ -99,7 +99,7 @@ inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
-inline __attribute__((always_inline)) uint32_t sampleIndex(uint32_t samples)
+inline __attribute__((always_inline)) uint32_t getSampleIndex(uint32_t samples)
 {
 	return samples & (AUDIO_BLOCK_SAMPLES-1);
 }
@@ -107,17 +107,17 @@ inline __attribute__((always_inline)) uint32_t sampleIndex(uint32_t samples)
 
 struct GrainStruct
 {
-	uint32_t start = 0; //grain first position relative to head.
-	uint32_t buffSamplePos = 0; //next grain position in queue.
+	uint32_t sampleStart = 0; //grain first position relative to head.
+	uint32_t buffertPosition = 0; //next grain position in queue.
 	uint32_t size = 50; //grain size
-	int32_t magnitude[4];
-	uint32_t sizePos = 0;
+	int32_t magnitude[4]; //volume per channel
+	uint32_t position = 0; //position relative to size
 
-	uint32_t window_phase_accumulator;
-	uint32_t window_phase_increment;
+	uint32_t windowPhaseAccumulator;
+	uint32_t windowPhaseIncrement;
 
-	uint32_t grain_phase_accumulator;
-	uint32_t grain_phase_increment;
+	uint32_t grainPhaseAccumulator;
+	uint32_t grainPhaseIncrement;
 
 	GrainStruct * next = NULL;
 
@@ -139,7 +139,7 @@ struct GrainStruct
 		Serial.print(size, DEC);
 		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , sizePos:");
-		Serial.print(sizePos, DEC);
+		Serial.print(position, DEC);
 		delay(DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS);
 		Serial.print(" , this:");
 		Serial.print((size_t) this, HEX);
@@ -216,12 +216,12 @@ public:
 	void resive(GrainStruct & g)
 	{
 		mResiving = true;
-		g.start = mResiver.start;
-		g.grain_phase_increment = mResiver.grain_phase_increment;
-		g.window_phase_increment = mResiver.window_phase_increment;
+		g.sampleStart = mResiver.sampleStart;
+		g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
+		g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
 		g.size = mResiver.size;
-		g.sizePos = 0;
-		g.window_phase_accumulator = 0;
+		g.position = 0;
+		g.windowPhaseAccumulator = 0;
 		for ( uint8_t ch = 0; ch < 3; ++ch )
 			g.magnitude[ch] = mResiver.magnitude[ch];
 
@@ -275,7 +275,7 @@ private:
 
 	uint32_t mConcurrentGrains;
 
-	bool setGrainBlock(GrainStruct* pGrain);
+	bool writeGrainBlock(GrainStruct* pGrain);
 
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
 	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
@@ -305,7 +305,7 @@ public:
 
 	float bufferMS();
 
-	uint32_t concurrentGrains()
+	inline __attribute__((always_inline)) uint32_t concurrentGrains()
 	{
 		return mConcurrentGrains;
 	}
