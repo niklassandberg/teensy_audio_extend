@@ -121,7 +121,6 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	//Out- and Inputs of audio and window.
 
 	int32_t * dst = mGrainBlock;
-	int32_t * end = dst + AUDIO_BLOCK_SAMPLES;
 	int32_t windowSample;
 	int32_t inputSample;
 
@@ -149,7 +148,8 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 	const int16_t * inputSrc;
 
-	while (dst < end)
+	int32_t len = AUDIO_BLOCK_SAMPLES;
+	while (len--)
 	{
 		if( grainPosition >= grainSize )
 		{
