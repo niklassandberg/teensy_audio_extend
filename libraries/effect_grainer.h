@@ -45,7 +45,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 40
-#define GRAINS_MAX_NUM 20
+#define GRAINS_MAX_NUM 40
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -273,6 +273,8 @@ private:
 
 	const int16_t * mWindow;
 
+	uint32_t mConcurrentGrains;
+
 	bool setGrainBlock(GrainStruct* pGrain);
 
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
@@ -302,6 +304,11 @@ public:
 	void interval(float ms);
 
 	float bufferMS();
+
+	uint32_t concurrentGrains()
+	{
+		return mConcurrentGrains;
+	}
 };
 
 #endif /* EFFECT_PITCHSHIFTER_H_2_ */

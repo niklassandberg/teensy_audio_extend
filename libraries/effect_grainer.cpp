@@ -160,31 +160,18 @@ bool AudioEffectGrainer::setGrainBlock(GrainStruct* pGrain)
 
 		//Audio
 
-		//TODO: Opt!!!!
-//		if( 0x1000000 >= grPh )
-//		{
-//			uint32_t jmp = grPh >> 24;
-//			grPh -= 0x800000 << jmp;
-//			sample += jmp;
-//			block = blockPos(sample);
-//			if( block >= mAudioBuffer.len)
-//			{
-//				sample -= jmp*samplePos(mAudioBuffer.len);
-//				block = blockPos(sample);
-//			}
-//		}
-
-		while( 16777216 >= grPh )
+		if( 0x1000000 <= grPh )
 		{
-			grPh -= 16777216;
-			block = blockPos(++sample);
+			uint32_t jmp = grPh >> 24;
+			grPh -= 0x1000000 * jmp;
+			sample += jmp;
+			block = blockPos(sample);
 			if( block >= mAudioBuffer.len)
 			{
 				sample -= samplePos(mAudioBuffer.len);
 				block = blockPos(sample);
 			}
 		}
-
 
 		inputSrc = mAudioBuffer.data[block]->data;
 
@@ -240,6 +227,7 @@ GrainStruct * AudioEffectGrainer::getFreeGrain()
 		return NULL;
 	mFreeGrain = mFreeGrain->next;
 	grain->next = NULL;
+	++mConcurrentGrains;
 	return grain;
 }
 
@@ -255,6 +243,7 @@ GrainStruct* AudioEffectGrainer::freeGrain(GrainStruct * grain, GrainStruct* pre
 
 		free->next = mFreeGrain;
 		mFreeGrain = free;
+		--mConcurrentGrains;
 		return grain;
 	}
 
@@ -409,4 +398,6 @@ AudioEffectGrainer::AudioEffectGrainer() :
 	mPlayGrain = NULL;
 
 	mTriggCount = 0;
+
+	mConcurrentGrains = 0;
 }
