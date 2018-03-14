@@ -153,8 +153,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	{
 		if( grainPosition >= grainSize )
 		{
-			*dst++ = 0;
-			continue;
+			break;
 		}
 
 		// ---------------------------------------------
@@ -175,18 +174,6 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		// ---------------------------------------------
 		// ------------------- Audio -------------------
 		// ---------------------------------------------
-
-		//sync phase increment with sample and block position.
-
-		if( 0x1000000 <= grainPhase )
-		{
-			uint32_t buffertIndexIncrement = grainPhase >> 24;
-			grainPhase &= 0xFFFFFF;
-			grainBuffertPosition += buffertIndexIncrement;
-			if( grainBuffertPosition >= mAudioBuffer.sampleSize )
-				grainBuffertPosition -= mAudioBuffer.sampleSize;
-			grainBlockPosition = getBlockPosition(grainBuffertPosition);
-		}
 
 		// Find first interpolate value.
 
@@ -214,6 +201,18 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		val2 *= scale;
 		inputSample = val1 + val2;
 		grainPhase += grainIncrement;
+
+		//sync phase increment with sample and block position.
+
+		if( 0x1000000 <= grainPhase )
+		{
+			uint32_t buffertIndexIncrement = grainPhase >> 24;
+			grainPhase &= 0xFFFFFF;
+			grainBuffertPosition += buffertIndexIncrement;
+			if( grainBuffertPosition >= mAudioBuffer.sampleSize )
+				grainBuffertPosition -= mAudioBuffer.sampleSize;
+			grainBlockPosition = getBlockPosition(grainBuffertPosition);
+		}
 
 		// ---------------------------------------------
 		// ------------- Audio * Window ----------------
@@ -335,19 +334,17 @@ void AudioEffectGrainer::update()
 	GrainStruct * grain = mPlayGrain;
 	GrainStruct * prev = NULL;
 
-	DEBUG_TRIG_ITER_ZERO_COUNT();
-
 	audio_block_t * outs[4];
 	for(uint8_t ch = 0 ; ch < 4 ; ++ch)
 		outs[ch] = NULL;
 
-	if( grain != NULL )
+	if( grain )
 	{
 		if( ! allocateOutputs(outs) ) return;
 	}
 
 	//Start DSP.
-	while (grain != NULL)
+	while ( grain )
 	{
 		DEBUG_PRINT_GRAIN(0, grain);
 
@@ -357,9 +354,6 @@ void AudioEffectGrainer::update()
 		} //if: grain has been played, free the grain.
 		else
 		{
-			DEBUG_TRIG_ITER_ADD_GRAIN(grain);
-			DEBUG_PRINT_GRAIN(1, grain);
-
 			setOutputs(outs, grain);
 			prev = grain;
 			grain = grain->next;
@@ -368,6 +362,18 @@ void AudioEffectGrainer::update()
 
 	transmitOutputs(outs);
 
+}
+
+void AudioEffectGrainer::resive(GrainStruct & g)
+{
+	g.sampleStart = mResiver.sampleStart;
+	g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
+	g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
+	g.size = mResiver.size;
+	g.position = 0;
+	g.windowPhaseAccumulator = 0;
+	for ( uint8_t ch = 0; ch < 3; ++ch )
+		g.magnitude[ch] = mResiver.magnitude[ch];
 }
 
 void AudioEffectGrainer::queueLength(uint16_t l)

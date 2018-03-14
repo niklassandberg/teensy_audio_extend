@@ -222,23 +222,13 @@ private:
 
 	GrainStruct mResiver;
 
-	void resive(GrainStruct & g)
-	{
-		g.sampleStart = mResiver.sampleStart;
-		g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
-		g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
-		g.size = mResiver.size;
-		g.position = 0;
-		g.windowPhaseAccumulator = 0;
-		for ( uint8_t ch = 0; ch < 3; ++ch )
-			g.magnitude[ch] = mResiver.magnitude[ch];
-	}
 
 	const int16_t * mWindow;
 
 	uint32_t mConcurrentGrains;
 
 	bool writeGrainBlock(GrainStruct* pGrain);
+	void resive(GrainStruct & g);
 
 	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
 	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
