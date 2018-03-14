@@ -42,23 +42,23 @@ bool AudioEffectGrainer::fillAudioBuffer()
 	return mAudioBuffer.isFilled;
 }
 
-void GrainParameter::pitch(float p)
+void AudioEffectGrainer::pitch(float p)
 {
 	if (p > 2.0) p = 2.0;
 	else if(p<0.0) p = 0.0;
-	//1<<24= 0x1000000 = 16777216
-	mSender.grainPhaseIncrement = 16777216.0 * p;
+	//1<<24 = 0x1000000 = 16777216
+	mResiver.grainPhaseIncrement = 16777216.0 * p;
 }
 
-void GrainParameter::durration(float ms)
+void AudioEffectGrainer::durration(float ms)
 {
 	uint32_t samples = MS_TO_SAMPLE_SCALE * ms;
 	if (samples < (AUDIO_BLOCK_SAMPLES<<1) )
 		samples = AUDIO_BLOCK_SAMPLES<<1;
 
-	mSender.size = samples;
-	//1<<24= 0x1000000 = 16777216
-	mSender.windowPhaseIncrement =
+	mResiver.size = samples;
+	//1<<24 = 0x1000000 = 16777216
+	mResiver.windowPhaseIncrement =
 			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
 }
 
@@ -71,22 +71,22 @@ void AudioEffectGrainer::interval(float ms)
 	mTriggGrain = blocks;
 }
 
-void GrainParameter::pos(float ms)
+void AudioEffectGrainer::pos(float ms)
 {
 	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
-	if ( samples  >= mAudioBuffer->sampleSize )
-		samples = mAudioBuffer->sampleSize - 1;
-	mSender.sampleStart = samples;
+	if ( samples  >= mAudioBuffer.sampleSize )
+		samples = mAudioBuffer.sampleSize - 1;
+	mResiver.sampleStart = samples;
 }
 
-void GrainParameter::amplitude(uint8_t ch, float n)
+void AudioEffectGrainer::amplitude(uint8_t ch, float n)
 {
 	if (n < 0)
 		n = 0;
 	else if (n > 1.0)
 		n = 1.0;
 	if(ch>3) ch = 3;
-	mSender.magnitude[ch] = n * 65536.0;
+	mResiver.magnitude[ch] = n * 65536.0;
 }
 
 bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
@@ -326,7 +326,7 @@ void AudioEffectGrainer::update()
 		if(triggedGrain)
 		{
 			//Fetch grain parameter if grain is new.
-			mGrainParam.resive(*triggedGrain);
+			resive(*triggedGrain);
 			triggedGrain->next = mPlayGrain;
 			mPlayGrain = triggedGrain;
 		}
@@ -393,12 +393,6 @@ void AudioEffectGrainer::freezer(bool f)
 float AudioEffectGrainer::bufferMS()
 {
 	return block2ms(mAudioBuffer.len);
-}
-
-GrainParameter * AudioEffectGrainer::next()
-{
-	mGrainParam.init(&mAudioBuffer);
-	return &mGrainParam;
 }
 
 AudioEffectGrainer::AudioEffectGrainer() :

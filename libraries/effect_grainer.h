@@ -184,57 +184,6 @@ struct AudioInputBuffer
 	}
 };
 
-class GrainParameter {
-public:
-	const AudioInputBuffer * mAudioBuffer;
-	GrainStruct mResiver;
-	GrainStruct mSender;
-	bool mResiving;
-	GrainParameter()
-	{
-		delay(10); Serial.println("GrainParameter: created!!!!");
-		mResiving = false;
-		mAudioBuffer = NULL;
-	}
-
-	void init(AudioInputBuffer * aib)
-	{
-		mAudioBuffer = aib;
-	}
-
-	void pitch(float p);
-	void durration(float ms);
-	void pos(float ms);
-	void amplitude(uint8_t ch, float n);
-
-	bool send()
-	{
-		//TODO: that about polling in teensy or interrupts?
-		if(mResiving) return false;
-		mResiver = mSender;
-		return true;
-	}
-
-	void resive(GrainStruct & g)
-	{
-		mResiving = true;
-		g.sampleStart = mResiver.sampleStart;
-		g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
-		g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
-		g.size = mResiver.size;
-		g.position = 0;
-		g.windowPhaseAccumulator = 0;
-		for ( uint8_t ch = 0; ch < 3; ++ch )
-			g.magnitude[ch] = mResiver.magnitude[ch];
-
-		mResiving = false;
-	}
-private:
-
-	GrainParameter( const GrainParameter& other ); // non construction-copyable
-	GrainParameter& operator=( const GrainParameter& grain); // non copyable
-};
-
 class AudioEffectGrainer : public AudioStream
 {
 private:
@@ -271,7 +220,19 @@ private:
 
 	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
 
-	GrainParameter mGrainParam;
+	GrainStruct mResiver;
+
+	void resive(GrainStruct & g)
+	{
+		g.sampleStart = mResiver.sampleStart;
+		g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
+		g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
+		g.size = mResiver.size;
+		g.position = 0;
+		g.windowPhaseAccumulator = 0;
+		for ( uint8_t ch = 0; ch < 3; ++ch )
+			g.magnitude[ch] = mResiver.magnitude[ch];
+	}
 
 	const int16_t * mWindow;
 
@@ -298,10 +259,17 @@ public:
 	virtual void update(void);
 
 	void freezer(bool f);
-	GrainParameter * next();
-	void grainFreeze(bool f);
 
+	//TODO: IMPL!!
 	//void numberOfGrains(uint8_t n);
+
+
+	void pitch(float p);
+	void durration(float ms);
+	void pos(float ms);
+	void amplitude(uint8_t ch, float n);
+
+
 	void queueLength(uint16_t l);
 	void interval(float ms);
 
