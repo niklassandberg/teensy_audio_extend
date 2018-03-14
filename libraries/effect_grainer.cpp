@@ -74,8 +74,8 @@ void AudioEffectGrainer::interval(float ms)
 void GrainParameter::pos(float ms)
 {
 	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
-	if (getBlockPosition(samples) >= mAudioBuffer->len)
-		samples = samplePos(mAudioBuffer->len) - 1;
+	if ( samples  >= mAudioBuffer->sampleSize )
+		samples = mAudioBuffer->sampleSize - 1;
 	mSender.sampleStart = samples;
 }
 
@@ -132,7 +132,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		if (grainBuffertPosition <= headBuffertPosition)
 			grainBuffertPosition = headBuffertPosition - grainBuffertPosition;
 		else
-			grainBuffertPosition = ( samplePos( mAudioBuffer.len )
+			grainBuffertPosition = ( mAudioBuffer.sampleSize
 					- grainBuffertPosition ) + headBuffertPosition;
 		grainBlockPosition = getBlockPosition( grainBuffertPosition );
 		windowPhase = grainPhase = 0;
@@ -148,8 +148,8 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 	const int16_t * inputSrc;
 
-	int32_t len = AUDIO_BLOCK_SAMPLES;
-	while (len--)
+	int32_t end = AUDIO_BLOCK_SAMPLES;
+	while (end--)
 	{
 		if( grainPosition >= grainSize )
 		{
@@ -181,14 +181,11 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		if( 0x1000000 <= grainPhase )
 		{
 			uint32_t buffertIndexIncrement = grainPhase >> 24;
-			grainPhase -= 0x1000000 * buffertIndexIncrement;
+			grainPhase &= 0xFFFFFF;
 			grainBuffertPosition += buffertIndexIncrement;
+			if( grainBuffertPosition >= mAudioBuffer.sampleSize )
+				grainBuffertPosition -= mAudioBuffer.sampleSize;
 			grainBlockPosition = getBlockPosition(grainBuffertPosition);
-			if( grainBlockPosition >= mAudioBuffer.len)
-			{
-				grainBuffertPosition -= samplePos(mAudioBuffer.len);
-				grainBlockPosition = getBlockPosition(grainBuffertPosition);
-			}
 		}
 
 		// Find first interpolate value.
@@ -204,9 +201,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 			interpolateIndex = 0;
 			uint32_t bNext = grainBlockPosition+1;
 			if( bNext >= mAudioBuffer.len)
-			{
 				inputSrc = mAudioBuffer.data[0]->data;
-			}
 			else
 				inputSrc = mAudioBuffer.data[bNext]->data;
 		}
@@ -387,6 +382,7 @@ void AudioEffectGrainer::queueLength(uint16_t l)
 	{
 		mAudioBuffer.len = l;
 	}
+	mAudioBuffer.sampleSize = samplePos(l);
 }
 
 void AudioEffectGrainer::freezer(bool f)

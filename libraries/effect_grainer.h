@@ -45,7 +45,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 40
-#define GRAINS_MAX_NUM 40
+#define GRAINS_MAX_NUM 35
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -166,10 +166,12 @@ struct AudioInputBuffer
 {
 	bool isFilled;
 	bool freeze;
-	uint16_t head;
-	uint16_t tail;
-	uint16_t len;
+	uint32_t head;
+	uint32_t tail;
+	uint32_t len;
 	audio_block_t *data[GRAIN_BLOCK_QUEUE_SIZE];
+
+	uint32_t sampleSize = samplePos(GRAIN_BLOCK_QUEUE_SIZE);
 
 	AudioInputBuffer()
 	{
