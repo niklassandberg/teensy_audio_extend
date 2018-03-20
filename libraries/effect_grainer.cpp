@@ -42,12 +42,34 @@ bool AudioEffectGrainer::fillAudioBuffer()
 	return mAudioBuffer.isFilled;
 }
 
+void AudioEffectGrainer::adjustPosition()
+{
+	uint32_t sampleStart = mResiver.saved_sampleStart;
+	uint32_t neededSamples;
+	float p = mResiver.saved_pitchRatio;
+
+	if( p > 1.0 )
+	{
+		neededSamples = float(mResiver.size) * (p-1.f);
+		if(sampleStart < neededSamples)
+			mResiver.sampleStart = neededSamples;
+		else
+			mResiver.sampleStart = sampleStart;
+	}
+	else if( p < 1.0 )
+	{
+		//TODO: impl!!!
+	}
+}
+
 void AudioEffectGrainer::pitch(float p)
 {
 	if (p > 2.0) p = 2.0;
 	else if(p<0.0) p = 0.0;
+
 	//1<<24 = 0x1000000 = 16777216
 	mResiver.grainPhaseIncrement = 16777216.0 * p;
+	mResiver.saved_pitchRatio = p;
 }
 
 void AudioEffectGrainer::durration(float ms)
@@ -60,8 +82,6 @@ void AudioEffectGrainer::durration(float ms)
 	//1<<24 = 0x1000000 = 16777216
 	mResiver.windowPhaseIncrement =
 			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
-
-
 }
 
 void AudioEffectGrainer::interval(float ms)
@@ -70,16 +90,18 @@ void AudioEffectGrainer::interval(float ms)
 	if (samples < AUDIO_BLOCK_SAMPLES)
 		samples = AUDIO_BLOCK_SAMPLES;
 	uint16_t blocks = samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+	mTriggGrain = blocks;
+}
 
+void AudioEffectGrainer::adjustInterval()
+{
 	if( mResiver.size > 2560 )
 	{
 		uint32_t evenSpreadTrig =
 				float(getBlockPosition( mResiver.size )) *
 				GRAINS_EVEN_SPREAD_TRIG_SCALE + 10.0;
-		if(blocks < evenSpreadTrig) blocks = evenSpreadTrig;
+		if(mTriggGrain < evenSpreadTrig) mTriggGrain = evenSpreadTrig;
 	}
-
-	mTriggGrain = blocks;
 }
 
 void AudioEffectGrainer::pos(float ms)
@@ -88,6 +110,7 @@ void AudioEffectGrainer::pos(float ms)
 	if ( samples  >= mAudioBuffer.sampleSize )
 		samples = mAudioBuffer.sampleSize - 1;
 	mResiver.sampleStart = samples;
+	mResiver.saved_sampleStart = samples;
 }
 
 void AudioEffectGrainer::amplitude(uint8_t ch, float n)
