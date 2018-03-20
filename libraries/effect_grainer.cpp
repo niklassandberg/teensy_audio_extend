@@ -207,7 +207,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		++grainPosition;
 	}
 
-	if( lastBlock && samplesLeft < AUDIO_BLOCK_SAMPLES )
+	if( samplesLeft < AUDIO_BLOCK_SAMPLES )
 		memset((void*)dst,0,(AUDIO_BLOCK_SAMPLES-samplesLeft)*sizeof(int32_t) );
 
 	//update grain to next block set.
