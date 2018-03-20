@@ -76,7 +76,7 @@ void AudioEffectGrainer::pos(float ms)
 	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
 	if ( samples  >= mAudioBuffer.sampleSize )
 		samples = mAudioBuffer.sampleSize - 1;
-	mResiver.buffertPosition = samples;
+	mResiver.sampleStart = samples;
 }
 
 void AudioEffectGrainer::amplitude(uint8_t ch, float n)
@@ -364,7 +364,7 @@ void AudioEffectGrainer::resive(GrainStruct & g)
 	g.magnitude[3] = mResiver.magnitude[3];
 
 	//set position relative to head block.
-	uint32_t samples = mResiver.buffertPosition;
+	uint32_t samples = mResiver.sampleStart;
 	uint32_t headBuffertPosition = samplePos( mAudioBuffer.head );
 	if (samples <= headBuffertPosition)
 		samples = headBuffertPosition - samples;
