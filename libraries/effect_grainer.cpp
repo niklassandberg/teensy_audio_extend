@@ -60,6 +60,8 @@ void AudioEffectGrainer::durration(float ms)
 	//1<<24 = 0x1000000 = 16777216
 	mResiver.windowPhaseIncrement =
 			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
+
+
 }
 
 void AudioEffectGrainer::interval(float ms)
@@ -68,6 +70,15 @@ void AudioEffectGrainer::interval(float ms)
 	if (samples < AUDIO_BLOCK_SAMPLES)
 		samples = AUDIO_BLOCK_SAMPLES;
 	uint16_t blocks = samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
+
+	if( mResiver.size > 2560 )
+	{
+		uint32_t evenSpreadTrig =
+				float(getBlockPosition( mResiver.size )) *
+				GRAINS_EVEN_SPREAD_TRIG_SCALE + 10.0;
+		if(blocks < evenSpreadTrig) blocks = evenSpreadTrig;
+	}
+
 	mTriggGrain = blocks;
 }
 
