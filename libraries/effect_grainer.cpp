@@ -98,12 +98,6 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	int32_t grainIncrement = pGrain->grainPhaseIncrement;
 	uint32_t grainBlockPosition, grainPhase;
 
-	if (grainPosition >= grainSize)
-	{
-		pGrain->position = 0;
-		return false;
-	}
-
 	uint32_t grainBuffertPosition;
 
 	//Window variables.
@@ -124,27 +118,13 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	int32_t windowSample;
 	int32_t inputSample;
 
-	if ( grainPosition == 0 )
-	{
-		//set position relative to head block.
-		grainBuffertPosition = pGrain->sampleStart;
-		uint32_t headBuffertPosition = samplePos( mAudioBuffer.head );
-		if (grainBuffertPosition <= headBuffertPosition)
-			grainBuffertPosition = headBuffertPosition - grainBuffertPosition;
-		else
-			grainBuffertPosition = ( mAudioBuffer.sampleSize
-					- grainBuffertPosition ) + headBuffertPosition;
-		grainBlockPosition = getBlockPosition( grainBuffertPosition );
-		windowPhase = grainPhase = 0;
-	}
-	else
-	{
-		grainBuffertPosition = pGrain->buffertPosition;
-		grainBlockPosition = getBlockPosition(grainBuffertPosition);
+	uint32_t bNext;
 
-		windowPhase = pGrain->windowPhaseAccumulator;
-		grainPhase = pGrain->grainPhaseAccumulator;
-	}
+	grainBuffertPosition = pGrain->buffertPosition;
+	grainBlockPosition = getBlockPosition(grainBuffertPosition);
+
+	windowPhase = pGrain->windowPhaseAccumulator;
+	grainPhase = pGrain->grainPhaseAccumulator;
 
 	const int16_t * inputSrc;
 
@@ -153,7 +133,8 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	{
 		if( grainPosition >= grainSize )
 		{
-			break;
+			*dst++ = 0;
+			continue;
 		}
 
 		// ---------------------------------------------
@@ -183,15 +164,15 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 		// Find next interpolate value.
 
-		if( ++interpolateIndex >= AUDIO_BLOCK_SAMPLES )
-		{
-			interpolateIndex = 0;
-			uint32_t bNext = grainBlockPosition+1;
-			if( bNext >= mAudioBuffer.len)
-				inputSrc = mAudioBuffer.data[0]->data;
-			else
-				inputSrc = mAudioBuffer.data[bNext]->data;
-		}
+		++grainBuffertPosition;
+		if( grainBuffertPosition >= mAudioBuffer.sampleSize )
+			bNext = 0;
+		else
+			bNext = getBlockPosition(grainBuffertPosition);
+		interpolateIndex = getSampleIndex(grainBuffertPosition);
+		inputSrc = mAudioBuffer.data[bNext]->data;
+		--grainBuffertPosition;
+
 		val2 = inputSrc[interpolateIndex];
 
 		//Audio interpolate.
@@ -204,15 +185,12 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 		//sync phase increment with sample and block position.
 
-		if( 0x1000000 <= grainPhase )
-		{
-			uint32_t buffertIndexIncrement = grainPhase >> 24;
-			grainPhase &= 0xFFFFFF;
-			grainBuffertPosition += buffertIndexIncrement;
-			if( grainBuffertPosition >= mAudioBuffer.sampleSize )
-				grainBuffertPosition -= mAudioBuffer.sampleSize;
-			grainBlockPosition = getBlockPosition(grainBuffertPosition);
-		}
+		uint32_t buffertIndexIncrement = grainPhase >> 24;
+		grainPhase &= 0xFFFFFF;
+		grainBuffertPosition += buffertIndexIncrement;
+		if( grainBuffertPosition >= mAudioBuffer.sampleSize )
+			grainBuffertPosition -= mAudioBuffer.sampleSize;
+		grainBlockPosition = getBlockPosition(grainBuffertPosition);
 
 		// ---------------------------------------------
 		// ------------- Audio * Window ----------------
@@ -231,7 +209,13 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	pGrain->grainPhaseAccumulator = grainPhase;
 	pGrain->position = grainPosition;
 
-	return true;
+	if (grainPosition >= grainSize)
+	{
+		pGrain->position = 0;
+		return true;
+	}
+
+	return false;
 }
 
 GrainStruct * AudioEffectGrainer::getFreeGrain()
@@ -348,8 +332,9 @@ void AudioEffectGrainer::update()
 	{
 		DEBUG_PRINT_GRAIN(0, grain);
 
-		if ( ! writeGrainBlock(grain) )
+		if ( writeGrainBlock(grain) )
 		{
+			setOutputs(outs, grain);
 			grain = freeGrain(grain, prev);
 		} //if: grain has been played, free the grain.
 		else
@@ -366,14 +351,27 @@ void AudioEffectGrainer::update()
 
 void AudioEffectGrainer::resive(GrainStruct & g)
 {
-	g.sampleStart = mResiver.sampleStart;
 	g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
 	g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
 	g.size = mResiver.size;
 	g.position = 0;
 	g.windowPhaseAccumulator = 0;
-	for ( uint8_t ch = 0; ch < 3; ++ch )
-		g.magnitude[ch] = mResiver.magnitude[ch];
+	g.grainPhaseAccumulator = 0;
+
+	g.magnitude[0] = mResiver.magnitude[0];
+	g.magnitude[1] = mResiver.magnitude[1];
+	g.magnitude[2] = mResiver.magnitude[2];
+	g.magnitude[3] = mResiver.magnitude[3];
+
+	//set position relative to head block.
+	uint32_t samples = mResiver.sampleStart;
+	uint32_t headBuffertPosition = samplePos( mAudioBuffer.head );
+	if (samples <= headBuffertPosition)
+		samples = headBuffertPosition - samples;
+	else
+		samples = ( mAudioBuffer.sampleSize
+				- samples ) + headBuffertPosition;
+	g.buffertPosition = samples;
 }
 
 void AudioEffectGrainer::queueLength(uint16_t l)

@@ -107,6 +107,8 @@ inline __attribute__((always_inline)) uint32_t getSampleIndex(uint32_t samples)
 
 struct GrainStruct
 {
+	//TODO: sampleStart, buffertPosition one variable!
+
 	uint32_t sampleStart = 0; //grain first position relative to head.
 	uint32_t buffertPosition = 0; //next grain position in queue.
 	uint32_t size = 50; //grain size
