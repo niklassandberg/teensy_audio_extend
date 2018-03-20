@@ -128,14 +128,19 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 	const int16_t * inputSrc;
 
+	int32_t samplesLeft = grainSize - grainPosition;
+	bool lastBlock = samplesLeft <= AUDIO_BLOCK_SAMPLES;
+
 	int32_t end = AUDIO_BLOCK_SAMPLES;
+	if(lastBlock) end = samplesLeft;
+
 	while (end--)
 	{
-		if( grainPosition >= grainSize )
-		{
-			*dst++ = 0;
-			continue;
-		}
+//		if( grainPosition >= grainSize )
+//		{
+//			*dst++ = 0;
+//			continue;
+//		}
 
 		// ---------------------------------------------
 		// ------------- Window Interpolate ------------
@@ -202,6 +207,9 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		++grainPosition;
 	}
 
+	if( lastBlock && samplesLeft < AUDIO_BLOCK_SAMPLES )
+		memset((void*)dst,0,(AUDIO_BLOCK_SAMPLES-samplesLeft)*sizeof(int32_t) );
+
 	//update grain to next block set.
 
 	pGrain->buffertPosition = grainBuffertPosition;
@@ -209,7 +217,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	pGrain->grainPhaseAccumulator = grainPhase;
 	pGrain->position = grainPosition;
 
-	if (grainPosition >= grainSize)
+	if ( lastBlock )
 	{
 		pGrain->position = 0;
 		return true;
@@ -250,6 +258,13 @@ bool AudioEffectGrainer::allocateOutputs(audio_block_t* outs[4])
 	//Allocate output data.
 	for (uint8_t ch = 0; ch < 4; ++ch)
 	{
+
+		if(mDisableChannel[ch])
+		{
+			outs[ch] = NULL;
+			continue;
+		}
+
 		//TODO: disable functionality
 		audio_block_t* out = AudioStream::allocate();
 		if ( !out )

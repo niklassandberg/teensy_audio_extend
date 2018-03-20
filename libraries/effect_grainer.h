@@ -109,23 +109,17 @@ struct GrainStruct
 {
 	uint32_t sampleStart = 0; //grain first position relative to head.
 	uint32_t buffertPosition = 0; //next grain position in queue.
-	uint32_t size = 50; //grain size
-	int32_t magnitude[4]; //volume per channel
+	uint32_t size = ms2sample(100); //grain size
+	int32_t magnitude[4]={0,0,0,0}; //volume per channel
 	uint32_t position = 0; //position relative to size
 
-	uint32_t windowPhaseAccumulator;
-	uint32_t windowPhaseIncrement;
+	uint32_t windowPhaseAccumulator=0;
+	uint32_t windowPhaseIncrement=0;
 
-	uint32_t grainPhaseAccumulator;
-	uint32_t grainPhaseIncrement;
+	uint32_t grainPhaseAccumulator=0;
+	uint32_t grainPhaseIncrement=0;
 
 	GrainStruct * next = NULL;
-
-	GrainStruct()
-	{
-		for (uint8_t ch = 0; ch < 4; ++ch)
-			magnitude[ch] = 0;
-	}
 
 #if PRINT_GRAIN
 	#define DEBUG_PRINT_GRAIN(N,G) { if(G) (G)->print(N); }
@@ -206,6 +200,8 @@ private:
 	#define DEBUG_TRIG_ITER_ADD_GRAIN(grain) {}
 #endif
 
+	bool mDisableChannel[4]={false,false,false,false};
+
 	uint32_t mTriggCount;
 	uint32_t mTriggGrain;
 
@@ -268,6 +264,12 @@ public:
 	inline __attribute__((always_inline)) uint32_t concurrentGrains()
 	{
 		return mConcurrentGrains;
+	}
+
+	void disable(uint8_t ch)
+	{
+		if(ch>3) return;
+		mDisableChannel[ch] = true;
 	}
 };
 
