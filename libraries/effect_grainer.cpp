@@ -55,7 +55,7 @@ void AudioEffectGrainer::adjustPosition()
 	 * 			working in the most cases maybe...
 	 */
 
-	if( p > 1.0 )
+	if( p > 1.f )
 	{
 		neededSamples = float(mResiver.size) * (p-1.f);
 		if(sampleStart < neededSamples)
@@ -63,7 +63,7 @@ void AudioEffectGrainer::adjustPosition()
 		else
 			mResiver.sampleStart = sampleStart;
 	}
-	else if( p > 0.1 )
+	else if( p > 0.1f )
 	{
 		//TODO: opt (1.f/p) and/or is it (1.f/p - 1.f) even if it gives crackle?
 		neededSamples = float(mResiver.size) * (1.f/p);
@@ -77,11 +77,11 @@ void AudioEffectGrainer::adjustPosition()
 
 void AudioEffectGrainer::pitch(float p)
 {
-	if (p > 2.0) p = 2.0;
-	else if(p<0.0) p = 0.0;
+	if (p > 2.f) p = 2.f;
+	else if(p<0.f) p = 0.f;
 
 	//1<<24 = 0x1000000 = 16777216
-	mResiver.grainPhaseIncrement = 16777216.0 * p;
+	mResiver.grainPhaseIncrement = 16777216.f * p;
 	mResiver.saved_pitchRatio = p;
 }
 
@@ -94,7 +94,7 @@ void AudioEffectGrainer::durration(float ms)
 	mResiver.size = samples;
 	//1<<24 = 0x1000000 = 16777216
 	mResiver.windowPhaseIncrement =
-			33554432.0 * (float(AUDIO_BLOCK_SAMPLES)/samples) + .5;
+			33554432.f * (AUDIO_BLOCK_SAMPLES_FLOAT/float(samples)) + .5f;
 }
 
 void AudioEffectGrainer::interval(float ms)
@@ -111,8 +111,8 @@ void AudioEffectGrainer::adjustInterval()
 	if( mResiver.size > 2560 )
 	{
 		uint32_t evenSpreadTrig =
-				float(getBlockPosition( mResiver.size )) *
-				GRAINS_EVEN_SPREAD_TRIG_SCALE + 10.0;
+			float(getBlockPosition( mResiver.size /*+ AUDIO_BLOCK_SAMPLES -1*/ )) *
+				GRAINS_EVEN_SPREAD_TRIG_SCALE;
 		if(mTriggGrain < evenSpreadTrig) mTriggGrain = evenSpreadTrig;
 	}
 }
@@ -128,12 +128,12 @@ void AudioEffectGrainer::pos(float ms)
 
 void AudioEffectGrainer::amplitude(uint8_t ch, float n)
 {
-	if (n < 0)
-		n = 0;
-	else if (n > 1.0)
-		n = 1.0;
+	if (n < 0.f)
+		n = 0.f;
+	else if (n > 1.f)
+		n = 1.f;
 	if(ch>3) ch = 3;
-	mResiver.magnitude[ch] = n * 65536.0;
+	mResiver.magnitude[ch] = n * 65536.f;
 }
 
 bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)

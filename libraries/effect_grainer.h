@@ -46,7 +46,7 @@ extern const int16_t AudioWindowTukey256[];
 //BUGG
 //becomes unstable if more like 40
 #define GRAINS_MAX_NUM 35
-static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1/GRAINS_MAX_NUM;
+static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -55,12 +55,14 @@ static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1/GRAINS_MAX_NUM;
 #define DEBUG_PRINT_GRAIN_DELAY_ON_MEMBERS 0
 #define DEBUG_PRINT_GRAIN_DELAY 0
 
-static constexpr float MS_TO_SAMPLE_SCALE = AUDIO_SAMPLE_RATE_EXACT / 1000.0;
+static constexpr float AUDIO_BLOCK_SAMPLES_FLOAT = float(AUDIO_BLOCK_SAMPLES);
+
+static constexpr float MS_TO_SAMPLE_SCALE = AUDIO_SAMPLE_RATE_EXACT / 1000.f;
 
 static constexpr float MS_TO_BLOCK_SCALE =
-		(AUDIO_SAMPLE_RATE_EXACT) / (float(AUDIO_BLOCK_SAMPLES) * 1000.0);
+		(AUDIO_SAMPLE_RATE_EXACT) / (float(AUDIO_BLOCK_SAMPLES) * 1000.f);
 static constexpr float BLOCK_TO_MS_SCALE =
-		(float(AUDIO_BLOCK_SAMPLES) * 1000.0) / (AUDIO_SAMPLE_RATE_EXACT);
+		(float(AUDIO_BLOCK_SAMPLES) * 1000.f) / (AUDIO_SAMPLE_RATE_EXACT);
 
 static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
 
@@ -76,7 +78,7 @@ template<> struct ShiftOp<0>
 
 inline __attribute__((always_inline)) uint32_t ms2block(float ms)
 {
-	return ms * MS_TO_BLOCK_SCALE +.5;
+	return ms * MS_TO_BLOCK_SCALE +.5f;
 }
 
 inline __attribute__((always_inline)) float block2ms(uint32_t blocks)
@@ -107,8 +109,8 @@ inline __attribute__((always_inline)) uint32_t getSampleIndex(uint32_t samples)
 
 struct GrainStruct
 {
-	float saved_pitchRatio = 0.0;
-	uint32_t saved_sampleStart = 0.0;
+	float saved_pitchRatio = 0.f;
+	uint32_t saved_sampleStart = 0;
 
 	uint32_t sampleStart = 0; //grain first position relative to head.
 	uint32_t buffertPosition = 0; //next grain position in queue.
