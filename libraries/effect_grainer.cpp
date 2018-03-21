@@ -48,6 +48,13 @@ void AudioEffectGrainer::adjustPosition()
 	uint32_t neededSamples;
 	float p = mResiver.saved_pitchRatio;
 
+
+	/*
+	 * TODO: not thinking of head writing in block
+	 * 			but variable sample writing based on pitch pitch.
+	 * 			working in the most cases maybe...
+	 */
+
 	if( p > 1.0 )
 	{
 		neededSamples = float(mResiver.size) * (p-1.f);
@@ -56,9 +63,15 @@ void AudioEffectGrainer::adjustPosition()
 		else
 			mResiver.sampleStart = sampleStart;
 	}
-	else if( p < 1.0 )
+	else if( p > 0.1 )
 	{
-		//TODO: impl!!!
+		//TODO: opt (1.f/p) and/or is it (1.f/p - 1.f) even if it gives crackle?
+		neededSamples = float(mResiver.size) * (1.f/p);
+		neededSamples = mAudioBuffer.sampleSize - neededSamples;
+		if(sampleStart > neededSamples)
+			mResiver.sampleStart = neededSamples;
+		else
+			mResiver.sampleStart = sampleStart;
 	}
 }
 
@@ -170,11 +183,6 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 	while (end--)
 	{
-//		if( grainPosition >= grainSize )
-//		{
-//			*dst++ = 0;
-//			continue;
-//		}
 
 		// ---------------------------------------------
 		// ------------- Window Interpolate ------------

@@ -105,7 +105,6 @@ inline __attribute__((always_inline)) uint32_t getSampleIndex(uint32_t samples)
 	return samples & (AUDIO_BLOCK_SAMPLES-1);
 }
 
-
 struct GrainStruct
 {
 	float saved_pitchRatio = 0.0;
@@ -119,7 +118,6 @@ struct GrainStruct
 
 	uint32_t windowPhaseAccumulator=0;
 	uint32_t windowPhaseIncrement=0;
-
 	uint32_t grainPhaseAccumulator=0;
 	uint32_t grainPhaseIncrement=0;
 
