@@ -45,7 +45,8 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 40
-#define GRAINS_MAX_NUM 35
+#define GRAINS_MAX_NUM 45
+
 static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
 //For debug
