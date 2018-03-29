@@ -48,7 +48,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 50
-#define GRAINS_MAX_NUM 45
+#define GRAINS_MAX_NUM 51
 
 static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
@@ -128,7 +128,7 @@ struct GrainStruct
 	uint32_t grainPhaseAccumulator=0;
 	uint32_t grainPhaseIncrement=0;
 
-	GrainStruct * next = NULL;
+	bool dead = true;
 
 #if PRINT_GRAIN
 	#define DEBUG_PRINT_GRAIN(N,G) { if(G) (G)->print(N); }
@@ -214,29 +214,24 @@ private:
 	uint32_t mTriggCount;
 	uint32_t mTriggGrain;
 
-	GrainStruct * mPlayGrain;
-	GrainStruct * mFreeGrain;
-
 	AudioInputBuffer mAudioBuffer;
 
 	audio_block_t * mInputQueueArray[1];
 
 	GrainStruct mGrains[GRAINS_MAX_NUM];
 
+	GrainStruct * mPlayGrains[GRAINS_MAX_NUM];
+
 	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
 
 	GrainStruct mResiver;
-
 
 	const int16_t * mWindow;
 
 	uint32_t mConcurrentGrains;
 
 	bool writeGrainBlock(GrainStruct* pGrain);
-	void resive(GrainStruct & g);
-
-	inline __attribute__((always_inline))  GrainStruct * getFreeGrain();
-	inline __attribute__((always_inline))  GrainStruct * freeGrain(GrainStruct * grain, GrainStruct* prev);
+	void resive(GrainStruct * g);
 
 	inline __attribute__((always_inline))
 		bool allocateOutputs(audio_block_t* out[4]);

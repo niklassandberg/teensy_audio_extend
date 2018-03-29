@@ -113,7 +113,8 @@ void AudioEffectGrainer::adjustInterval()
 		uint32_t evenSpreadTrig =
 			float(getBlockPosition( mResiver.size /*+ AUDIO_BLOCK_SAMPLES -1*/ )) *
 				GRAINS_EVEN_SPREAD_TRIG_SCALE;
-		if(mTriggGrain < evenSpreadTrig) mTriggGrain = evenSpreadTrig;
+		if(mTriggGrain < evenSpreadTrig)
+			mTriggGrain = evenSpreadTrig;
 	}
 }
 
@@ -257,38 +258,12 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	if ( lastBlock )
 	{
 		pGrain->position = 0;
+		pGrain->dead = true;
 		return true;
 	}
 
 	return false;
 }
-
-GrainStruct * AudioEffectGrainer::getFreeGrain()
-{
-	GrainStruct * grain = mFreeGrain;
-	if (grain == NULL)
-		return NULL;
-	mFreeGrain = mFreeGrain->next;
-	grain->next = NULL;
-	++mConcurrentGrains;
-	return grain;
-}
-
-GrainStruct* AudioEffectGrainer::freeGrain(GrainStruct * grain, GrainStruct* prev)
-	{
-		GrainStruct* free = grain;
-		if (mPlayGrain == grain)
-			grain = mPlayGrain = grain->next;
-		else if (prev != NULL)
-			grain = prev->next = grain->next;
-		else
-			grain = grain->next;
-
-		free->next = mFreeGrain;
-		mFreeGrain = free;
-		--mConcurrentGrains;
-		return grain;
-	}
 
 bool AudioEffectGrainer::allocateOutputs(audio_block_t* outs[4])
 {
@@ -354,67 +329,78 @@ void AudioEffectGrainer::update()
 	//Wait until audio buffer is full.
 	if (!fillAudioBuffer()) return;
 
-	if( ++mTriggCount >= mTriggGrain )
+	size_t freeGrainIndex = GRAINS_MAX_NUM;
+	mConcurrentGrains = 0;
+	size_t index = GRAINS_MAX_NUM;
+
+	GrainStruct ** grainSrc = mPlayGrains;
+
+	//Fill playing grains and find a free grain.
+	while(index--)
 	{
-		mTriggCount = 0;
-		GrainStruct * triggedGrain = getFreeGrain();
-		if(triggedGrain)
+		if( mGrains[index].dead )
+			freeGrainIndex = index;
+		else
 		{
-			//Fetch grain parameter if grain is new.
-			resive(*triggedGrain);
-			triggedGrain->next = mPlayGrain;
-			mPlayGrain = triggedGrain;
+			*grainSrc++ = &(mGrains[index]);
+			mConcurrentGrains++;
 		}
 	}
 
-
-	GrainStruct * grain = mPlayGrain;
-	GrainStruct * prev = NULL;
+	if( ++mTriggCount >= mTriggGrain )
+	{
+		mTriggCount = 0;
+		if(freeGrainIndex!=GRAINS_MAX_NUM)
+		{
+			//Fetch grain parameter if grain is new.
+			resive(&(mGrains[freeGrainIndex]));
+			*grainSrc++ = &(mGrains[freeGrainIndex]);
+			mConcurrentGrains++;
+		}
+	}
 
 	audio_block_t * outs[4];
 	for(uint8_t ch = 0 ; ch < 4 ; ++ch)
 		outs[ch] = NULL;
 
-	if( grain )
+	if( mConcurrentGrains )
 	{
 		if( ! allocateOutputs(outs) ) return;
 	}
 
-	//Start DSP.
-	while ( grain )
-	{
-		DEBUG_PRINT_GRAIN(0, grain);
+	GrainStruct * grain;
 
-		if ( writeGrainBlock(grain) )
-		{
-			setOutputs(outs, grain);
-			grain = freeGrain(grain, prev);
-		} //if: grain has been played, free the grain.
-		else
-		{
-			setOutputs(outs, grain);
-			prev = grain;
-			grain = grain->next;
-		}
+	size_t end = mConcurrentGrains;
+
+	//Start DSP.
+	while ( end-- )
+	{
+		grain = *(--grainSrc);
+		DEBUG_PRINT_GRAIN(0, grain);
+		writeGrainBlock(grain);
+		setOutputs(outs, grain);
 	}
 
 	transmitOutputs(outs);
 
 }
 
-void AudioEffectGrainer::resive(GrainStruct & g)
+void AudioEffectGrainer::resive(GrainStruct * g)
 {
-	g.grainPhaseIncrement = mResiver.grainPhaseIncrement;
-	g.windowPhaseIncrement = mResiver.windowPhaseIncrement;
-	g.size = mResiver.size;
-	g.position = 0;
-	g.windowPhaseAccumulator = 0;
-	g.grainPhaseAccumulator = 0;
+//	g->grainPhaseIncrement = mResiver.grainPhaseIncrement;
+//	g->windowPhaseIncrement = mResiver.windowPhaseIncrement;
+//	g->size = mResiver.size;
+//
+//	g->magnitude[0] = mResiver.magnitude[0];
+//	g->magnitude[1] = mResiver.magnitude[1];
+//	g->magnitude[2] = mResiver.magnitude[2];
+//	g->magnitude[3] = mResiver.magnitude[3];
 
-	g.magnitude[0] = mResiver.magnitude[0];
-	g.magnitude[1] = mResiver.magnitude[1];
-	g.magnitude[2] = mResiver.magnitude[2];
-	g.magnitude[3] = mResiver.magnitude[3];
+	*g = mResiver;
+
+	g->position = 0;
+	g->windowPhaseAccumulator = 0;
+	g->grainPhaseAccumulator = 0;
 
 	//set position relative to head block.
 	uint32_t samples = mResiver.sampleStart;
@@ -424,7 +410,8 @@ void AudioEffectGrainer::resive(GrainStruct & g)
 	else
 		samples = ( mAudioBuffer.sampleSize
 				- samples ) + headBuffertPosition;
-	g.buffertPosition = samples;
+	g->buffertPosition = samples;
+	g->dead = false;
 }
 
 void AudioEffectGrainer::queueLength(uint16_t l)
@@ -455,15 +442,6 @@ float AudioEffectGrainer::bufferMS()
 AudioEffectGrainer::AudioEffectGrainer() :
 		AudioStream(1, mInputQueueArray), mWindow(AudioWindowNuttall256)
 {
-	int i = GRAINS_MAX_NUM - 1;
-	mGrains[i].next = NULL;
-	for (; i > 0; --i)
-	{
-		mGrains[i - 1].next = &(mGrains[i]);
-	}
-	mFreeGrain = &(mGrains[0]);
-	mPlayGrain = NULL;
-
 	mTriggCount = 0;
 
 	mConcurrentGrains = 0;
