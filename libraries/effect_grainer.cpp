@@ -103,7 +103,7 @@ void AudioEffectGrainer::interval(float ms)
 	if (samples < AUDIO_BLOCK_SAMPLES)
 		samples = AUDIO_BLOCK_SAMPLES;
 	uint16_t blocks = samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
-	mTriggGrain = blocks;
+	mTriggGrain = mSavedTriggGrain = blocks;
 }
 
 void AudioEffectGrainer::adjustInterval()
@@ -113,8 +113,10 @@ void AudioEffectGrainer::adjustInterval()
 		uint32_t evenSpreadTrig =
 			float(getBlockPosition( mResiver.size /*+ AUDIO_BLOCK_SAMPLES -1*/ )) *
 				GRAINS_EVEN_SPREAD_TRIG_SCALE;
-		if(mTriggGrain < evenSpreadTrig)
+		if(mSavedTriggGrain < evenSpreadTrig)
 			mTriggGrain = evenSpreadTrig;
+		else
+			mTriggGrain = mSavedTriggGrain;
 	}
 }
 

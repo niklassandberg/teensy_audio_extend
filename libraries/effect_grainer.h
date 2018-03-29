@@ -213,6 +213,7 @@ private:
 
 	uint32_t mTriggCount;
 	uint32_t mTriggGrain;
+	uint32_t mSavedTriggGrain;
 
 	AudioInputBuffer mAudioBuffer;
 
