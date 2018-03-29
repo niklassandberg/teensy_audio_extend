@@ -15,6 +15,9 @@
 #if defined(__MK66FX1M0__)
   // 2.41 second maximum on Teensy 3.6
   #define GRAIN_BLOCK_QUEUE_SIZE  (106496 / AUDIO_BLOCK_SAMPLES)
+
+  //2,9661538461538461538461538461538 second maximum on Teensy 3.6
+  //#define GRAIN_BLOCK_QUEUE_SIZE 1024
 #elif defined(__MK64FX512__)
   // 1.67 second maximum on Teensy 3.5
   #define GRAIN_BLOCK_QUEUE_SIZE  (73728 / AUDIO_BLOCK_SAMPLES)
@@ -44,7 +47,7 @@ extern const int16_t AudioWindowTukey256[];
 }
 
 //BUGG
-//becomes unstable if more like 40
+//becomes unstable if more like 50
 #define GRAINS_MAX_NUM 45
 
 static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
@@ -67,6 +70,7 @@ static constexpr float BLOCK_TO_MS_SCALE =
 
 static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
 
+static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = (uint32_t) ((uint64_t)AUDIO_BLOCK_SAMPLES << 24) - 1;
 template<int i> struct ShiftOp
 {
 	static const int result = 1 + ShiftOp<(i-1)/2>::result;

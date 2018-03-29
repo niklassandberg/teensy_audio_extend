@@ -78,7 +78,7 @@ void AudioEffectGrainer::adjustPosition()
 void AudioEffectGrainer::pitch(float p)
 {
 	if (p > 2.f) p = 2.f;
-	else if(p<0.0001f) p = 0.0001f;
+	else if(p<0.f) p = 0.f;
 
 	//1<<24 = 0x1000000 = 16777216
 	mResiver.grainPhaseIncrement = 16777216.f * p;
@@ -159,6 +159,70 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	int32_t samplesToWrite;
 	samplesToWrite = (lastBlock) ? samplesLeft : AUDIO_BLOCK_SAMPLES;
 
+
+	// ---------------------------------------------
+	// ------------------- Audio -------------------
+	// ---------------------------------------------
+
+	phaseAcc = pGrain->grainPhaseAccumulator;
+	phaseIncr = pGrain->grainPhaseIncrement;
+
+	dst = mGrainBlock;
+	end = samplesToWrite;
+
+	uint32_t toIndex;
+	uint32_t prevIndex;
+
+	//Apperantly (uint8_t) is needed... Why?
+	//interpolateIndex = (uint8_t) (phaseAcc>>24) & (AUDIO_BLOCK_SAMPLES-1);
+	interpolateIndex = getSampleIndex(grainBuffertPosition);
+	while (end>-1)
+	{
+		prevIndex = interpolateIndex;
+
+		if( interpolateIndex >= AUDIO_BLOCK_SAMPLES-1 )
+		{
+			toIndex = 128 << 24;
+
+			uint32_t blockPos = getBlockPosition(grainBuffertPosition);
+//			if( blockPos >= mAudioBuffer.len ) blockPos = 0; //TODO: chould not be neesesary!
+			inputSrc1 = mAudioBuffer.data[ blockPos ]->data;
+			if( ++blockPos >= mAudioBuffer.len ) blockPos = 0;
+			inputSrc2 = mAudioBuffer.data[blockPos]->data;
+		}
+		else
+		{
+			toIndex = 127 << 24;
+
+			if( grainBuffertPosition >= mAudioBuffer.sampleSize)
+				grainBuffertPosition -= mAudioBuffer.sampleSize;
+			inputSrc1 = mAudioBuffer.data[ getBlockPosition(grainBuffertPosition) ]->data;
+			inputSrc2 = inputSrc1;
+		}
+
+		while(phaseAcc < toIndex && end--)
+		{
+			interpolateIndex = getSampleIndex(interpolateIndex);
+			val1 = inputSrc1[ interpolateIndex ];
+			val2 = inputSrc2[ getSampleIndex(interpolateIndex+1) ];
+			scale = (phaseAcc >> 8) & 0xFFFF;
+			val1 *= 0x10000 - scale;
+			val2 *= scale;
+			*dst++ = val1 + val2;
+
+			phaseAcc += phaseIncr;
+			interpolateIndex = phaseAcc >> 24;
+		}
+
+		grainBuffertPosition += (interpolateIndex - prevIndex);
+		phaseAcc &= AUDIO_BLOCK_SAMPLES_24_BITOP;
+		interpolateIndex = getSampleIndex(grainBuffertPosition);
+	}
+
+	pGrain->grainPhaseAccumulator = phaseAcc;
+	pGrain->buffertPosition = grainBuffertPosition;
+	pGrain->position += samplesToWrite;
+
 	// ---------------------------------------------
 	// ------------- Window Interpolate ------------
 	// ---------------------------------------------
@@ -179,108 +243,19 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 		val2 *= scale;
 		phaseAcc += phaseIncr;
 
-		*dst++ = val1 + val2;
+		*dst = multiply_32x32_rshift32(val1 + val2, *dst);
+		++dst;
 	}
 
 	pGrain->windowPhaseAccumulator = phaseAcc;
 
-	// ---------------------------------------------
-	// ------------------- Audio -------------------
-	// ---------------------------------------------
-
-	phaseAcc = pGrain->grainPhaseAccumulator;
-	phaseIncr = pGrain->grainPhaseIncrement;
-
-	dst = mGrainBlock;
-	end = samplesToWrite;
-
-	uint32_t toIndex;
-	uint32_t prevIndex;
-
-	while (end>-1)
-	{
-		interpolateIndex = getSampleIndex(grainBuffertPosition);
-		prevIndex = interpolateIndex;
-
-		if( interpolateIndex == AUDIO_BLOCK_SAMPLES-1 )
-		{
-//			//delay(10);
-//			//Serial.println("toIndex = 128");
-
-			toIndex = 128;
-
-			uint32_t blockPos = getBlockPosition(grainBuffertPosition);
-			inputSrc1 = mAudioBuffer.data[ blockPos ]->data;
-			if( ++blockPos >= mAudioBuffer.len ) blockPos = 0;
-			inputSrc2 = mAudioBuffer.data[blockPos]->data;
-		}
-		else
-		{
-//			//delay(10);
-//			//Serial.println("toIndex = 127");
-
-			toIndex = 127;
-
-			if( grainBuffertPosition >= mAudioBuffer.sampleSize)
-				grainBuffertPosition -= mAudioBuffer.sampleSize;
-			inputSrc1 = mAudioBuffer.data[ getBlockPosition(grainBuffertPosition) ]->data;
-			inputSrc2 = inputSrc1;
-		}
-
-		while(interpolateIndex < toIndex && end--)
-		{
-//			//delay(10);
-//			//Serial.print("end: "); //Serial.println(end);
-
-			val1 = inputSrc1[ interpolateIndex ];
-			val2 = inputSrc2[ getSampleIndex(interpolateIndex+1) ];
-			scale = (phaseAcc >> 8) & 0xFFFF;
-			val1 *= 0x10000 - scale;
-			val2 *= scale;
-			*dst = multiply_32x32_rshift32(val1 + val2, *dst);
-
-			phaseAcc += phaseIncr;
-			interpolateIndex += (phaseAcc >> 24);
-			phaseAcc &= 0xFFFFFF;
-			++dst;
-
-//			//delay(1);
-//			//Serial.println("----");
-//			//Serial.print("phaseIncr: "); //Serial.println(scale);
-//			//Serial.print("phaseAcc: "); //Serial.println(scale);
-//			//Serial.print("index1: "); //Serial.println(interpolateIndex);
-//			//Serial.print("scale: "); //Serial.println(scale);
-//			//Serial.println("----");
-		}
-
-		grainBuffertPosition += (interpolateIndex - prevIndex);
-
-//		//delay(1);
-//		//Serial.print("grainBuffertPosition: "); //Serial.println(grainBuffertPosition);
-
-	}
 
 	if( samplesLeft < AUDIO_BLOCK_SAMPLES )
 			memset((void*)dst,0,(AUDIO_BLOCK_SAMPLES-samplesLeft)*sizeof(int32_t) );
 
-	pGrain->grainPhaseAccumulator = phaseAcc;
-	pGrain->buffertPosition = grainBuffertPosition;
-	pGrain->position += samplesToWrite;
-
-
 
 	if ( lastBlock )
 	{
-		//delay(1);
-		//Serial.println("!!!! lastBlock !!!!");
-
-		//delay(1);
-		//Serial.print("phaseAcc: "); //Serial.println(phaseAcc);
-		//Serial.print("buffertPosition: "); //Serial.println(grainBuffertPosition);
-		//Serial.print("position: "); //Serial.println(pGrain->position);
-
-		//Serial.println("----");
-
 		pGrain->position = 0;
 		return true;
 	}
