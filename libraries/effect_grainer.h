@@ -48,7 +48,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 50
-#define GRAINS_MAX_NUM 51
+#define GRAINS_MAX_NUM 45
 
 static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
@@ -71,6 +71,9 @@ static constexpr float BLOCK_TO_MS_SCALE =
 static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
 
 static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = (uint32_t) ((uint64_t)AUDIO_BLOCK_SAMPLES << 24) - 1;
+//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
+//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
+
 template<int i> struct ShiftOp
 {
 	static const int result = 1 + ShiftOp<(i-1)/2>::result;
