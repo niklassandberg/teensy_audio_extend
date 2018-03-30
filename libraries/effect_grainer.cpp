@@ -92,18 +92,19 @@ void AudioEffectGrainer::durration(float ms)
 		samples = AUDIO_BLOCK_SAMPLES<<1;
 
 	mResiver.size = samples;
-	//1<<24 = 0x1000000 = 16777216
+	//2*(1<<24) = 0x2000000 = 33554432
 	mResiver.windowPhaseIncrement =
 			33554432.f * (AUDIO_BLOCK_SAMPLES_FLOAT/float(samples)) + .5f;
 }
 
 void AudioEffectGrainer::interval(float ms)
 {
-	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
-	if (samples < AUDIO_BLOCK_SAMPLES)
-		samples = AUDIO_BLOCK_SAMPLES;
-	uint16_t blocks = samples >> ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
-	mTriggGrain = mSavedTriggGrain = blocks;
+	uint32_t interv = MS_TO_SAMPLE_SCALE * ms + .5;
+	if (interv < AUDIO_BLOCK_SAMPLES)
+		interv = AUDIO_BLOCK_SAMPLES;
+	//interval is on block position.
+	interv = getBlockPosition( interv );
+	mTriggGrain = mSavedTriggGrain = interv;
 }
 
 void AudioEffectGrainer::adjustInterval()
@@ -435,9 +436,7 @@ float AudioEffectGrainer::bufferMS()
 }
 
 AudioEffectGrainer::AudioEffectGrainer() :
-		AudioStream(1, mInputQueueArray), mWindow(AudioWindowNuttall256)
-{
-	mTriggCount = 0;
-
-	mConcurrentGrains = 0;
-}
+		AudioStream(1, mInputQueueArray),
+		mWindow(AudioWindowNuttall256),
+		mTriggCount(0), mConcurrentGrains(0)
+{}

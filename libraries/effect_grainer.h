@@ -48,7 +48,7 @@ extern const int16_t AudioWindowTukey256[];
 
 //BUGG
 //becomes unstable if more like 50
-#define GRAINS_MAX_NUM 45
+#define GRAINS_MAX_NUM 50
 
 static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
@@ -106,7 +106,6 @@ inline __attribute__((always_inline)) uint32_t getBlockPosition(uint32_t samples
 
 inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 {
-	// Note: sample pos is from 0-127.. now it is 0. therefore 2^16
 	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
@@ -120,11 +119,11 @@ struct GrainStruct
 	float saved_pitchRatio = 0.f;
 	uint32_t saved_sampleStart = 0;
 
-	uint32_t sampleStart = 0; //grain first position relative to head.
-	uint32_t blockPosition = 0; //next grain position in queue.
-	uint32_t size = ms2sample(100); //grain size
+	uint32_t sampleStart = 0; //grain first sample position relative to head.
+	uint32_t blockPosition = 0; //block position in queue.
+	uint32_t size = ms2sample(100); //grain sample size
 	int32_t magnitude[4]={0,0,0,0}; //volume per channel
-	uint32_t position = 0; //position relative to size
+	uint32_t position = 0; //sample position relative to size
 
 	uint32_t windowPhaseAccumulator=0;
 	uint32_t windowPhaseIncrement=0;
@@ -159,12 +158,6 @@ struct GrainStruct
 	#define DEBUG_PRINT_GRAIN(G,N) {}
 	void print(uint8_t index) {}
 #endif
-
-//	GrainStruct(){}
-private:
-//
-//	GrainStruct( const GrainStruct& other ){} // non construction-copyable
-//	GrainStruct& operator=( const GrainStruct& ){} // non copyable
 
 };
 
@@ -214,21 +207,18 @@ private:
 
 	bool mDisableChannel[4]={false,false,false,false};
 
-	uint32_t mTriggCount;
-	uint32_t mTriggGrain;
-	uint32_t mSavedTriggGrain;
+	size_t mTriggCount;
+	size_t mTriggGrain;
+	size_t mSavedTriggGrain;
 
 	AudioInputBuffer mAudioBuffer;
 
 	audio_block_t * mInputQueueArray[1];
 
 	GrainStruct mGrains[GRAINS_MAX_NUM];
-
 	GrainStruct * mPlayGrains[GRAINS_MAX_NUM];
-
-	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
-
 	GrainStruct mResiver;
+	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
 
 	const int16_t * mWindow;
 
