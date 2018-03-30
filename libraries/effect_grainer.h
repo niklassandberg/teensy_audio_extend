@@ -121,7 +121,7 @@ struct GrainStruct
 	uint32_t saved_sampleStart = 0;
 
 	uint32_t sampleStart = 0; //grain first position relative to head.
-	uint32_t buffertPosition = 0; //next grain position in queue.
+	uint32_t blockPosition = 0; //next grain position in queue.
 	uint32_t size = ms2sample(100); //grain size
 	int32_t magnitude[4]={0,0,0,0}; //volume per channel
 	uint32_t position = 0; //position relative to size
