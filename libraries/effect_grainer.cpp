@@ -67,7 +67,7 @@ void AudioEffectGrainer::adjustPosition()
 	{
 		//TODO: opt (1.f/p) and/or is it (1.f/p - 1.f) even if it gives crackle?
 		neededSamples = float(mResiver.size) * (1.f/p);
-		neededSamples = mAudioBuffer.sampleSize - neededSamples;
+		neededSamples = samplePos(mAudioBuffer.len) - neededSamples;
 		if(sampleStart > neededSamples)
 			mResiver.sampleStart = neededSamples;
 		else
@@ -123,8 +123,8 @@ void AudioEffectGrainer::adjustInterval()
 void AudioEffectGrainer::pos(float ms)
 {
 	uint32_t samples = MS_TO_SAMPLE_SCALE * ms + .5;
-	if ( samples  >= mAudioBuffer.sampleSize )
-		samples = mAudioBuffer.sampleSize - 1;
+	if ( getBlockPosition(samples) >= mAudioBuffer.len )
+		samples = samplePos(mAudioBuffer.len) - 1;
 	mResiver.sampleStart = samples;
 	mResiver.saved_sampleStart = samples;
 }
@@ -422,7 +422,6 @@ void AudioEffectGrainer::queueLength(uint16_t l)
 	{
 		mAudioBuffer.len = l;
 	}
-	mAudioBuffer.sampleSize = samplePos(l);
 }
 
 void AudioEffectGrainer::freezer(bool f)
