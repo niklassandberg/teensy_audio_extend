@@ -9,34 +9,28 @@
 
 bool AudioEffectGrainer::fillAudioBuffer()
 {
-	if (mAudioBuffer.freeze)
-		return true;
+	if (mAudioBuffer.freeze) return true;
+
 	uint32_t head = mAudioBuffer.head;
-	uint32_t tail = mAudioBuffer.tail;
-	uint32_t len = mAudioBuffer.len;
 	audio_block_struct ** data = mAudioBuffer.data;
 
-	if (++head >= len)
-		head = 0;
-	if (head == tail)
+	if (head >= mAudioBuffer.len) head = 0;
+
+	if( data[head] )
 	{
-		if (data[tail] != NULL)
-		{
-			release(data[tail]);
-			data[tail] = NULL;
-		}
-		if (++tail >= len)
-			tail = 0;
+		mAudioBuffer.isFilled = true;
+		release(data[head]);
+		data[head] = NULL;
 	}
+
 	data[head] = receiveReadOnly();
 	if (!data[head])
+	{
+		mAudioBuffer.isFilled = false;
 		return false;
+	}
 
-	mAudioBuffer.head = head;
-	mAudioBuffer.tail = tail;
-
-	if (head == 0)
-		mAudioBuffer.isFilled = true;
+	mAudioBuffer.head = ++head;
 
 	return mAudioBuffer.isFilled;
 }
@@ -59,7 +53,7 @@ void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
 	{
 		//record head outside of new length.
 		if( l < mAudioBuffer.head )
-			mAudioBuffer.tail = mAudioBuffer.head = 0;
+			mAudioBuffer.head = 0;
 		//kill all grains.
 		uint32_t index = GRAINS_MAX_NUM;
 		GrainStruct * grain = mGrains;
@@ -75,7 +69,14 @@ void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
 	}
 	else
 	{
-		//(based on present code) :
+		//Remove everything over head position.
+		uint32_t index = GRAIN_BLOCK_QUEUE_SIZE-mAudioBuffer.head;
+		audio_block_struct * block = mAudioBuffer.data[mAudioBuffer.head];
+		while(index--)
+		{
+			if( block ) release(block);
+			++block;
+		}
 		//Just forget to play any grains until audio buffer is full
 		mAudioBuffer.isFilled = false;
 	}

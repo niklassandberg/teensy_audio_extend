@@ -177,7 +177,6 @@ struct AudioInputBuffer
 	bool isFilled;
 	bool freeze;
 	uint32_t head;
-	uint32_t tail;
 	uint32_t len;
 	audio_block_t *data[GRAIN_BLOCK_QUEUE_SIZE];
 
@@ -187,7 +186,6 @@ struct AudioInputBuffer
 	{
 		len = GRAIN_BLOCK_QUEUE_SIZE;
 		head = 0;
-		tail = 0;
 		isFilled = false;
 		freeze = false;
 		memset(data, 0, sizeof(data));
