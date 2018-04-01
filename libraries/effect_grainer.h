@@ -48,6 +48,21 @@ extern const int16_t AudioWindowCosine256[];
 extern const int16_t AudioWindowTukey256[];
 }
 
+enum WINDOW_TYPE
+{
+	HANNING,
+	BARTLETT,
+	BLACKMAN,
+	FLATTOP,
+	BLACKMAN_HARRIS,
+	NUTTALL,
+	BLACKMAN_NUTTALL,
+	WELCH,
+	HAMMING,
+	COSINE,
+	TUKEY
+};
+
 //becomes unstable if more like 50
 #define GRAINS_MAX_NUM 50
 
@@ -249,7 +264,7 @@ public:
 	void durration(float ms);
 	void pos(float ms);
 	void amplitude(uint8_t ch, float n);
-
+	void window(WINDOW_TYPE w);
 
 	void audioBufferBlockLength(uint32_t l);
 	void interval(float ms);

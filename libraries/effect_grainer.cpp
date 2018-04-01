@@ -183,6 +183,47 @@ void AudioEffectGrainer::amplitude(uint8_t ch, float n)
 	mResiver.magnitude[ch] = n * 65536.f;
 }
 
+void AudioEffectGrainer::window(WINDOW_TYPE w)
+{
+	switch (w) {
+		case HANNING :
+			mWindow = AudioWindowHanning256;
+			break;
+		case BARTLETT :
+			mWindow = AudioWindowBartlett256;
+			break;
+		case BLACKMAN :
+			mWindow = AudioWindowBlackman256;
+			break;
+		case FLATTOP :
+			mWindow = AudioWindowFlattop256;
+			break;
+		case BLACKMAN_HARRIS :
+			mWindow = AudioWindowBlackmanHarris256;
+			break;
+		case NUTTALL :
+			mWindow = AudioWindowNuttall256;
+			break;
+		case BLACKMAN_NUTTALL :
+			mWindow = AudioWindowBlackmanNuttall256;
+			break;
+		case WELCH :
+			mWindow = AudioWindowWelch256;
+			break;
+		case HAMMING :
+			mWindow = AudioWindowHamming256;
+			break;
+		case COSINE :
+			mWindow = AudioWindowCosine256;
+			break;
+		case TUKEY :
+			mWindow = AudioWindowTukey256;
+			break;
+		default:
+			break;
+	}
+}
+
 bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 {
 	//Grain variables
