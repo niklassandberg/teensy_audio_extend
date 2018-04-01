@@ -61,7 +61,6 @@ void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
 		if(mResiver.size > samplePos(mAudioBuffer.len))
 			mResiver.size = samplePos(mAudioBuffer.len-1);
 
-
 		//kill all grains.
 		uint32_t index = GRAINS_MAX_NUM;
 		GrainStruct * grain = mGrains;
