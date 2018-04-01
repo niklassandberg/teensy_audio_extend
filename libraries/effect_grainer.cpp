@@ -54,11 +54,15 @@ void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
 		//record head outside of new length.
 		if( l < mAudioBuffer.head )
 			mAudioBuffer.head = 0;
-		//kill all grains.
-		if( mResiver.sampleStart > samplePos(mAudioBuffer.len))
+
+		//Alter parameter that is outside of new buffer length
+		if( mResiver.saved_sampleStart > samplePos(mAudioBuffer.len))
 			mResiver.saved_sampleStart = mResiver.sampleStart = 0;
 		if(mResiver.size > samplePos(mAudioBuffer.len))
 			mResiver.size = samplePos(mAudioBuffer.len-1);
+
+
+		//kill all grains.
 		uint32_t index = GRAINS_MAX_NUM;
 		GrainStruct * grain = mGrains;
 		while(index--)
