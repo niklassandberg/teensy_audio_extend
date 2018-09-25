@@ -14,7 +14,7 @@ bool AudioEffectGrainer::fillAudioBuffer()
 	uint32_t head = mAudioBuffer.head;
 	audio_block_struct ** data = mAudioBuffer.data;
 
-	if (head >= mAudioBuffer.len) head = 0;
+	if (++head >= mAudioBuffer.len) head = 0;
 
 	if( data[head] )
 	{
@@ -30,9 +30,19 @@ bool AudioEffectGrainer::fillAudioBuffer()
 		return false;
 	}
 
-	mAudioBuffer.head = ++head;
+	mAudioBuffer.head = head;
 
 	return mAudioBuffer.isFilled;
+}
+
+void AudioEffectGrainer::releaseBlockOver(uint32_t index)
+{
+	for (size_t i = index; i < GRAIN_BLOCK_QUEUE_SIZE; ++i)
+	{
+		audio_block_struct* block = mAudioBuffer.data[i];
+		if (block) release(block);
+		mAudioBuffer.data[i] = NULL;
+	}
 }
 
 void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
@@ -70,22 +80,12 @@ void AudioEffectGrainer::audioBufferBlockLength(uint32_t l)
 		}
 
 		//free blocks.
-		for(size_t i = l ; i < GRAIN_BLOCK_QUEUE_SIZE ; ++i)
-		{
-			audio_block_struct * block = mAudioBuffer.data[i];
-			if( block ) release(block);
-		}
+		releaseBlockOver(l);
 	}
 	else
 	{
 		//Remove everything over head position.
-		uint32_t index = GRAIN_BLOCK_QUEUE_SIZE-mAudioBuffer.head;
-		audio_block_struct * block = mAudioBuffer.data[mAudioBuffer.head];
-		while(index--)
-		{
-			if( block ) release(block);
-			++block;
-		}
+		releaseBlockOver(mAudioBuffer.head);
 		//Just forget to play any grains until audio buffer is full
 		mAudioBuffer.isFilled = false;
 	}
@@ -105,24 +105,70 @@ void AudioEffectGrainer::adjustPosition()
 	 * 			working in the most cases maybe...
 	 */
 
+	/*
+	 * if: Pitch is higher =>
+	 * 		if: Need to check that the buffer write head does not eat grains read tail.
+	 * 		else if: need to check that the grains read head does not eat buffer write tail.
+	 */
 	if( p > 1.f )
 	{
+		//needed samples so the grains readHead does not eat the buffer writeTail.
+//		neededSamples = (float(mResiver.size) * (p-1.f)) + .5f;
+//		neededSamples = mAudioBuffer.len - neededSamples;
+//		//if: grains read head eats buffer write tail
+//		if( sampleStart > neededSamples)
+//		{
+//			mResiver.sampleStart = neededSamples;
+//		}
+//		else
+//		{
+//			mResiver.sampleStart = sampleStart;
+//		}
+
 		neededSamples = float(mResiver.size) * (p-1.f);
-		if(sampleStart < neededSamples)
-			mResiver.sampleStart = neededSamples;
-		else
-			mResiver.sampleStart = sampleStart;
+
+		Serial.print("neededSamples: ");
+		Serial.println(neededSamples);
+
+		Serial.print("sampleStart: ");
+		Serial.println(sampleStart);
+
+
+		//To avoid crackles in grains attack/release.
+//		if(neededSamples<AUDIO_BLOCK_SAMPLES)
+//			neededSamples = AUDIO_BLOCK_SAMPLES;
+
+		mResiver.sampleStart = sampleStart;
+//		if(sampleStart < neededSamples)
+//		{
+////			mResiver.sampleStart = neededSamples + AUDIO_BLOCK_SAMPLES*2;
+//		}
+//		else
+//		{
+//			mResiver.sampleStart = sampleStart;
+//		}
 	}
-	else if( p > 0.1f )
+	else if( p > 0.1f ) //to avoid div by zero.
 	{
-		//TODO: opt (1.f/p) and/or is it (1.f/p - 1.f)?
 		neededSamples = float(mResiver.size) * (1.f/p);
+
+		//To avoid crackles in grains attack/release.
+		if(neededSamples<AUDIO_BLOCK_SAMPLES)
+			neededSamples = AUDIO_BLOCK_SAMPLES;
+
 		neededSamples = samplePos(mAudioBuffer.len) - neededSamples;
 		if(sampleStart > neededSamples)
 			mResiver.sampleStart = neededSamples;
 		else
 			mResiver.sampleStart = sampleStart;
 	}
+//	else
+//	{
+//		if( sampleStart < AUDIO_BLOCK_SAMPLES )
+//			mResiver.sampleStart = AUDIO_BLOCK_SAMPLES;
+//		else
+//			mResiver.sampleStart = sampleStart;
+//	}
 }
 
 void AudioEffectGrainer::pitch(float p)
@@ -145,27 +191,25 @@ void AudioEffectGrainer::durration(float ms)
 
 	mResiver.size = samples;
 	//2*(1<<24) = 0x2000000 = 33554432
-	//TODO: do not use divide!!!
-	//It is stupid, we can have: CONSTANT*float(samples)
 	mResiver.windowPhaseIncrement =
 			33554432.f * (AUDIO_BLOCK_SAMPLES_FLOAT/float(samples)) + .5f;
 }
 
 void AudioEffectGrainer::interval(float ms)
 {
-	uint32_t interv = MS_TO_SAMPLE_SCALE * ms + .5;
-	if (interv < AUDIO_BLOCK_SAMPLES)
-		interv = AUDIO_BLOCK_SAMPLES;
+	uint32_t interval = MS_TO_SAMPLE_SCALE * ms + .5;
+	if (interval < AUDIO_BLOCK_SAMPLES)
+		interval = AUDIO_BLOCK_SAMPLES;
 	//interval is on block position.
-	interv = getBlockPosition( interv );
-	mTriggGrain = mSavedTriggGrain = interv;
+	interval = getBlockPosition( interval );
+	mTriggGrain = mSavedTriggGrain = interval;
 }
 
 void AudioEffectGrainer::adjustInterval()
 {
 	if( mResiver.size > 2560 )
 	{
-		uint32_t evenSpreadTrig =
+		size_t evenSpreadTrig =
 			float(getBlockPosition( mResiver.size )) *
 				mEvenSpreadTrigScale;
 		if(mSavedTriggGrain < evenSpreadTrig)
@@ -235,7 +279,7 @@ void AudioEffectGrainer::window(WINDOW_TYPE w)
 	}
 }
 
-bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
+void AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 {
 	//Grain variables
 
@@ -254,10 +298,17 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 	int32_t end;
 	int32_t * dst;
 	int32_t samplesLeft = grainSize - grainPosition;
-	bool lastBlock = samplesLeft <= AUDIO_BLOCK_SAMPLES;
 	int32_t samplesToWrite;
-	samplesToWrite = (lastBlock) ? samplesLeft : AUDIO_BLOCK_SAMPLES;
 
+	if(samplesLeft <= AUDIO_BLOCK_SAMPLES)
+	{
+		pGrain->dead = true; //grain will be dead.
+		samplesToWrite = samplesLeft;
+	}
+	else
+	{
+		samplesToWrite = AUDIO_BLOCK_SAMPLES;
+	}
 
 	// ---------------------------------------------
 	// ------------------- Audio -------------------
@@ -289,7 +340,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 				blockPosition -= mAudioBuffer.len;
 			inputSrc1 = mAudioBuffer.data[ blockPosition ]->data;
 			inputSrc2 = inputSrc1;
-		}
+		} //if: interpolate in the same block
 		else if( interpolateIndex >= AUDIO_BLOCK_SAMPLES-1 )
 		{
 			toIndex = AUDIO_BLOCK_SAMPLES << 24;
@@ -297,7 +348,7 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 			inputSrc1 = mAudioBuffer.data[ blockPos ]->data;
 			if( ++blockPos >= mAudioBuffer.len ) blockPos = 0;
 			inputSrc2 = mAudioBuffer.data[blockPos]->data;
-		}
+		} //else if: interpolate in different block
 
 		phaseAcc = nextPhaseAcc;
 		interpolateIndex = phaseAcc>>24;
@@ -346,18 +397,8 @@ bool AudioEffectGrainer::writeGrainBlock(GrainStruct* pGrain)
 
 	pGrain->windowPhaseAccumulator = phaseAcc;
 
-
 	if( samplesLeft < AUDIO_BLOCK_SAMPLES )
 			memset((void*)dst,0,(AUDIO_BLOCK_SAMPLES-samplesLeft)*sizeof(int32_t) );
-
-	if ( lastBlock )
-	{
-		pGrain->position = 0;
-		pGrain->dead = true;
-		return true;
-	}
-
-	return false;
 }
 
 bool AudioEffectGrainer::allocateOutputs(audio_block_t* outs[4])
@@ -391,9 +432,11 @@ bool AudioEffectGrainer::allocateOutputs(audio_block_t* outs[4])
 
 void AudioEffectGrainer::setOutputs(audio_block_t* outs[4], GrainStruct* grain)
 {
+	int32_t magnitude;
 	for (uint8_t ch = 0; ch < 4; ++ch)
 	{
-		if (outs[ch] == NULL || grain->magnitude[ch] == 0)
+		magnitude = grain->magnitude[ch];
+		if (outs[ch] == NULL || magnitude == 0)
 			continue;
 
 		int32_t* src = mGrainBlock;
@@ -401,7 +444,7 @@ void AudioEffectGrainer::setOutputs(audio_block_t* outs[4], GrainStruct* grain)
 		int16_t* end = dst + AUDIO_BLOCK_SAMPLES;
 		while (dst < end)
 		{
-			*dst++ += multiply_32x32_rshift32(*src++, grain->magnitude[ch]);
+			*dst++ += multiply_32x32_rshift32(*src++, magnitude);
 		}
 	}
 }
@@ -420,42 +463,50 @@ void AudioEffectGrainer::transmitOutputs(audio_block_t** outs)
 
 void AudioEffectGrainer::update()
 {
+
 	//Wait until audio buffer is full.
 	if (!fillAudioBuffer()) return;
 
-	size_t freeGrainIndex = mMaxNumOfGrains;
-	mConcurrentGrains = 0;
+	GrainStruct ** grainSrc;
+	grainSrc = mPlayGrains;
+	size_t freeGrainIndex = GRAINS_MAX_NUM;
+	uint32_t concurrentGrains = mConcurrentGrains = 0;
 	size_t index = mMaxNumOfGrains;
 
-	GrainStruct ** grainSrc = mPlayGrains;
-
 	//Fill playing grains and find a free grain.
-	while(index--)
+
+	while (index--)
 	{
-		if( mGrains[index].dead )
+		if (mGrains[index].dead)
+		{
 			freeGrainIndex = index;
+		}
 		else
 		{
 			*grainSrc++ = &(mGrains[index]);
-			mConcurrentGrains++;
+			++concurrentGrains;
 		}
 	}
 
-	if( ++mTriggCount >= mTriggGrain )
+	if (++mTriggCount >= mTriggGrain)
 	{
 		mTriggCount = 0;
-		if(freeGrainIndex!=mMaxNumOfGrains)
+		if (freeGrainIndex != GRAINS_MAX_NUM)
 		{
 			//Fetch grain parameter if grain is new.
 			resive(&(mGrains[freeGrainIndex]));
 			*grainSrc++ = &(mGrains[freeGrainIndex]);
-			mConcurrentGrains++;
+			concurrentGrains++;
 		}
 	}
 
+	mConcurrentGrains = concurrentGrains;
+
 	audio_block_t * outs[4];
-	for(uint8_t ch = 0 ; ch < 4 ; ++ch)
-		outs[ch] = NULL;
+	outs[0] = NULL;
+	outs[1] = NULL;
+	outs[2] = NULL;
+	outs[3] = NULL;
 
 	if( mConcurrentGrains )
 	{
@@ -470,7 +521,6 @@ void AudioEffectGrainer::update()
 	while ( end-- )
 	{
 		grain = *(--grainSrc);
-		DEBUG_PRINT_GRAIN(0, grain);
 		writeGrainBlock(grain);
 		setOutputs(outs, grain);
 	}
@@ -481,31 +531,22 @@ void AudioEffectGrainer::update()
 
 void AudioEffectGrainer::resive(GrainStruct * g)
 {
-	//TODO: copy hole struct or just members?
-
-//	g->grainPhaseIncrement = mResiver.grainPhaseIncrement;
-//	g->windowPhaseIncrement = mResiver.windowPhaseIncrement;
-//	g->size = mResiver.size;
-//
-//	g->magnitude[0] = mResiver.magnitude[0];
-//	g->magnitude[1] = mResiver.magnitude[1];
-//	g->magnitude[2] = mResiver.magnitude[2];
-//	g->magnitude[3] = mResiver.magnitude[3];
-
 	*g = mResiver;
 
 	//set position relative to head block.
-	uint32_t samples = getBlockPosition(mResiver.sampleStart);
-	if (samples <= mAudioBuffer.head)
-		samples = mAudioBuffer.head - samples;
+	uint32_t blocks = getBlockPosition(mResiver.sampleStart);
+	if (blocks <= mAudioBuffer.head)
+		blocks = mAudioBuffer.head - blocks;
 	else
-		samples = mAudioBuffer.len - samples + mAudioBuffer.head;
-	g->blockPosition = samples;
+		blocks = mAudioBuffer.len - blocks + mAudioBuffer.head;
+	g->blockPosition = blocks;
 	g->grainPhaseAccumulator = getSampleIndex( mResiver.sampleStart ) << 24 ;
 
-	g->dead = false;
 	g->position = 0;
 	g->windowPhaseAccumulator = 0;
+
+	g->dead = false;
+
 }
 
 void AudioEffectGrainer::freezer(bool f)
@@ -531,7 +572,7 @@ void AudioEffectGrainer::numberOfGrains(uint8_t n)
 
 AudioEffectGrainer::AudioEffectGrainer() :
 		AudioStream(1, mInputQueueArray),
-		mWindow(AudioWindowNuttall256),
+		mWindow(AudioWindowHanning256),
 		mTriggCount(0), mConcurrentGrains(0), mMaxNumOfGrains(GRAINS_MAX_NUM)
 {
 }

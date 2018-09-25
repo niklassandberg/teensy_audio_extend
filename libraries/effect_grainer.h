@@ -8,9 +8,11 @@
 #ifndef EFFECT_PITCHSHIFTER_H_2_
 #define EFFECT_PITCHSHIFTER_H_2_
 
+#include <grainProfiler.h>
 #include "Arduino.h"
 #include "AudioStream.h"
 #include "utility/dspinst.h"
+
 
 #if defined(__MK66FX1M0__)
   // 2.41 second maximum on Teensy 3.6
@@ -64,7 +66,8 @@ enum WINDOW_TYPE
 };
 
 //becomes unstable if more like 50
-#define GRAINS_MAX_NUM 50
+//#define GRAINS_MAX_NUM 40
+#define GRAINS_MAX_NUM 40
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -194,30 +197,11 @@ class AudioEffectGrainer : public AudioStream
 {
 private:
 
-#if DEBUG_TRIG_ITER_MODE
-	int countTest = 1;
-	void DEBUG_TRIG_ITER_ZERO_COUNT() { countTest = 1; }
-	void DEBUG_TRIG_ITER_ADD_GRAIN(GrainStruct * grain)
-	{
-		Serial.print("added grain, iter(");
-		Serial.print(countTest++, DEC);
-		Serial.print("), grain(");
-		Serial.print((size_t) (grain), HEX);
-		Serial.print(", next: ");
-		Serial.println((size_t) (grain->next), HEX);
-		++countTest; \
-	}
-#else
-	#define DEBUG_TRIG_ITER_ZERO_COUNT() {}
-	#define DEBUG_TRIG_ITER_ADD_GRAIN(grain) {}
-#endif
-
 	float mEvenSpreadTrigScale = 1.f/float(GRAINS_MAX_NUM);
 
 	bool mDisableChannel[4]={false,false,false,false};
 
 	size_t mMaxNumOfGrains;
-
 	size_t mTriggCount;
 	size_t mTriggGrain;
 	size_t mSavedTriggGrain;
@@ -235,7 +219,7 @@ private:
 
 	uint32_t mConcurrentGrains;
 
-	bool writeGrainBlock(GrainStruct* pGrain);
+	void writeGrainBlock(GrainStruct* pGrain);
 	void resive(GrainStruct * g);
 
 	inline __attribute__((always_inline))
@@ -244,6 +228,8 @@ private:
 		void setOutputs(audio_block_t* out[4], GrainStruct* grain);
 	inline __attribute__((always_inline))
 		void transmitOutputs(audio_block_t* out[4]);
+	inline __attribute__((always_inline))
+		void releaseBlockOver(uint32_t l);
 
 public:
 
