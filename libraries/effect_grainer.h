@@ -8,20 +8,14 @@
 #ifndef EFFECT_PITCHSHIFTER_H_2_
 #define EFFECT_PITCHSHIFTER_H_2_
 
-#include <grainProfiler.h>
 #include "Arduino.h"
 #include "AudioStream.h"
 #include "utility/dspinst.h"
-
 
 #if defined(__MK66FX1M0__)
   // 2.41 second maximum on Teensy 3.6
   #define GRAIN_BLOCK_QUEUE_SIZE  (106496 / AUDIO_BLOCK_SAMPLES)
 
-  //TODO: Idea. Possible optimization with bitop: GRAIN_BLOCK_QUEUE_SIZE => 2^(X) - 1
-  //      NOTICE: block 1024 does not fit memory.
-  //      Block 512 reduces the buffer length drastically.
-  //      And how many cycles do one gain on this?
   //2,9661538461538461538461538461538 second maximum on Teensy 3.6
   //#define GRAIN_BLOCK_QUEUE_SIZE 1024
 #elif defined(__MK64FX512__)
@@ -34,6 +28,8 @@
   // 0.14 second maximum on Teensy 3.0
   #define GRAIN_BLOCK_QUEUE_SIZE  (6144 / AUDIO_BLOCK_SAMPLES)
 #endif
+
+#define WINDOW_SIZE 256
 
 // windows.c
 extern "C" {
@@ -50,24 +46,11 @@ extern const int16_t AudioWindowCosine256[];
 extern const int16_t AudioWindowTukey256[];
 }
 
-enum WINDOW_TYPE
-{
-	HANNING,
-	BARTLETT,
-	BLACKMAN,
-	FLATTOP,
-	BLACKMAN_HARRIS,
-	NUTTALL,
-	BLACKMAN_NUTTALL,
-	WELCH,
-	HAMMING,
-	COSINE,
-	TUKEY
-};
-
+//BUGG
 //becomes unstable if more like 50
-//#define GRAINS_MAX_NUM 40
-#define GRAINS_MAX_NUM 40
+#define GRAINS_MAX_NUM 50
+
+static constexpr float GRAINS_EVEN_SPREAD_TRIG_SCALE = 1.f/float(GRAINS_MAX_NUM);
 
 //For debug
 #define DEBUG_TRIG_ITER_MODE 0
@@ -82,11 +65,14 @@ static constexpr float MS_TO_SAMPLE_SCALE = AUDIO_SAMPLE_RATE_EXACT / 1000.f;
 
 static constexpr float MS_TO_BLOCK_SCALE =
 		(AUDIO_SAMPLE_RATE_EXACT) / (float(AUDIO_BLOCK_SAMPLES) * 1000.f);
-
 static constexpr float BLOCK_TO_MS_SCALE =
 		(float(AUDIO_BLOCK_SAMPLES) * 1000.f) / (AUDIO_SAMPLE_RATE_EXACT);
 
+static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
+
 static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = (uint32_t) ((uint64_t)AUDIO_BLOCK_SAMPLES << 24) - 1;
+//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
+//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
 
 template<int i> struct ShiftOp
 {
@@ -120,6 +106,7 @@ inline __attribute__((always_inline)) uint32_t getBlockPosition(uint32_t samples
 
 inline __attribute__((always_inline)) uint32_t samplePos(uint32_t block)
 {
+	// Note: sample pos is from 0-127.. now it is 0. therefore 2^16
 	return block << ShiftOp<AUDIO_BLOCK_SAMPLES>::result;
 }
 
@@ -133,11 +120,11 @@ struct GrainStruct
 	float saved_pitchRatio = 0.f;
 	uint32_t saved_sampleStart = 0;
 
-	uint32_t sampleStart = 0; //grain first sample position relative to head.
-	uint32_t blockPosition = 0; //block position in queue.
-	uint32_t size = ms2sample(100); //grain sample size
+	uint32_t sampleStart = 0; //grain first position relative to head.
+	uint32_t buffertPosition = 0; //next grain position in queue.
+	uint32_t size = ms2sample(100); //grain size
 	int32_t magnitude[4]={0,0,0,0}; //volume per channel
-	uint32_t position = 0; //sample position relative to size
+	uint32_t position = 0; //position relative to size
 
 	uint32_t windowPhaseAccumulator=0;
 	uint32_t windowPhaseIncrement=0;
@@ -173,6 +160,12 @@ struct GrainStruct
 	void print(uint8_t index) {}
 #endif
 
+//	GrainStruct(){}
+private:
+//
+//	GrainStruct( const GrainStruct& other ){} // non construction-copyable
+//	GrainStruct& operator=( const GrainStruct& ){} // non copyable
+
 };
 
 struct AudioInputBuffer
@@ -180,13 +173,17 @@ struct AudioInputBuffer
 	bool isFilled;
 	bool freeze;
 	uint32_t head;
+	uint32_t tail;
 	uint32_t len;
 	audio_block_t *data[GRAIN_BLOCK_QUEUE_SIZE];
+
+	uint32_t sampleSize = samplePos(GRAIN_BLOCK_QUEUE_SIZE);
 
 	AudioInputBuffer()
 	{
 		len = GRAIN_BLOCK_QUEUE_SIZE;
 		head = 0;
+		tail = 0;
 		isFilled = false;
 		freeze = false;
 		memset(data, 0, sizeof(data));
@@ -197,29 +194,47 @@ class AudioEffectGrainer : public AudioStream
 {
 private:
 
-	float mEvenSpreadTrigScale = 1.f/float(GRAINS_MAX_NUM);
+#if DEBUG_TRIG_ITER_MODE
+	int countTest = 1;
+	void DEBUG_TRIG_ITER_ZERO_COUNT() { countTest = 1; }
+	void DEBUG_TRIG_ITER_ADD_GRAIN(GrainStruct * grain)
+	{
+		Serial.print("added grain, iter(");
+		Serial.print(countTest++, DEC);
+		Serial.print("), grain(");
+		Serial.print((size_t) (grain), HEX);
+		Serial.print(", next: ");
+		Serial.println((size_t) (grain->next), HEX);
+		++countTest; \
+	}
+#else
+	#define DEBUG_TRIG_ITER_ZERO_COUNT() {}
+	#define DEBUG_TRIG_ITER_ADD_GRAIN(grain) {}
+#endif
 
 	bool mDisableChannel[4]={false,false,false,false};
 
-	size_t mMaxNumOfGrains;
-	size_t mTriggCount;
-	size_t mTriggGrain;
-	size_t mSavedTriggGrain;
+	uint32_t mTriggCount;
+	uint32_t mTriggGrain;
+	uint32_t mSavedTriggGrain;
 
 	AudioInputBuffer mAudioBuffer;
 
 	audio_block_t * mInputQueueArray[1];
 
 	GrainStruct mGrains[GRAINS_MAX_NUM];
+
 	GrainStruct * mPlayGrains[GRAINS_MAX_NUM];
-	GrainStruct mResiver;
+
 	int32_t mGrainBlock[AUDIO_BLOCK_SAMPLES];
+
+	GrainStruct mResiver;
 
 	const int16_t * mWindow;
 
 	uint32_t mConcurrentGrains;
 
-	void writeGrainBlock(GrainStruct* pGrain);
+	bool writeGrainBlock(GrainStruct* pGrain);
 	void resive(GrainStruct * g);
 
 	inline __attribute__((always_inline))
@@ -228,8 +243,6 @@ private:
 		void setOutputs(audio_block_t* out[4], GrainStruct* grain);
 	inline __attribute__((always_inline))
 		void transmitOutputs(audio_block_t* out[4]);
-	inline __attribute__((always_inline))
-		void releaseBlockOver(uint32_t l);
 
 public:
 
@@ -241,15 +254,17 @@ public:
 
 	void freezer(bool f);
 
-	void numberOfGrains(uint8_t n);
+	//TODO: IMPL!!
+	//void numberOfGrains(uint8_t n);
+
 
 	void pitch(float p);
 	void durration(float ms);
 	void pos(float ms);
 	void amplitude(uint8_t ch, float n);
-	void window(WINDOW_TYPE w);
 
-	void audioBufferBlockLength(uint32_t l);
+
+	void queueLength(uint16_t l);
 	void interval(float ms);
 
 	float bufferMS();
