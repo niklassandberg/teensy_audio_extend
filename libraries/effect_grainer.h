@@ -173,7 +173,6 @@ struct AudioInputBuffer
 	bool isFilled;
 	bool freeze;
 	uint32_t head;
-	uint32_t tail;
 	uint32_t len;
 	audio_block_t *data[GRAIN_BLOCK_QUEUE_SIZE];
 
@@ -183,7 +182,6 @@ struct AudioInputBuffer
 	{
 		len = GRAIN_BLOCK_QUEUE_SIZE;
 		head = 0;
-		tail = 0;
 		isFilled = false;
 		freeze = false;
 		memset(data, 0, sizeof(data));
@@ -212,8 +210,11 @@ private:
 	#define DEBUG_TRIG_ITER_ADD_GRAIN(grain) {}
 #endif
 
+	float mEvenSpreadTrigScale = 1.f/float(GRAINS_MAX_NUM);
+
 	bool mDisableChannel[4]={false,false,false,false};
 
+	size_t mMaxNumOfGrains;
 	uint32_t mTriggCount;
 	uint32_t mTriggGrain;
 	uint32_t mSavedTriggGrain;
@@ -254,8 +255,7 @@ public:
 
 	void freezer(bool f);
 
-	//TODO: IMPL!!
-	//void numberOfGrains(uint8_t n);
+	void numberOfGrains(uint8_t n);
 
 
 	void pitch(float p);

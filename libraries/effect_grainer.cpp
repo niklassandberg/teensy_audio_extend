@@ -9,35 +9,28 @@
 
 bool AudioEffectGrainer::fillAudioBuffer()
 {
-	if (mAudioBuffer.freeze)
-		return true;
-	uint16_t head = mAudioBuffer.head;
-	uint16_t tail = mAudioBuffer.tail;
-	uint16_t len = mAudioBuffer.len;
+	if (mAudioBuffer.freeze) return true;
+
+	uint32_t head = mAudioBuffer.head;
 	audio_block_struct ** data = mAudioBuffer.data;
 
-	if (++head >= len)
-		head = 0;
-	if (head == tail)
+	if (++head >= mAudioBuffer.len) head = 0;
+
+	if( data[head] )
 	{
-		if (data[tail] != NULL)
-		{
-			release(data[tail]);
-			data[tail] = NULL;
-		}
-		if (++tail >= len)
-			tail = 0;
+		mAudioBuffer.isFilled = true;
+		release(data[head]);
+		data[head] = NULL;
 	}
+
 	data[head] = receiveReadOnly();
 	if (!data[head])
+	{
+		mAudioBuffer.isFilled = false;
 		return false;
+	}
 
 	mAudioBuffer.head = head;
-	mAudioBuffer.tail = tail;
-
-	//queue needs to be full before dsp
-	if (head == 0)
-		mAudioBuffer.isFilled = true;
 
 	return mAudioBuffer.isFilled;
 }
@@ -109,15 +102,15 @@ void AudioEffectGrainer::interval(float ms)
 void AudioEffectGrainer::adjustInterval()
 {
 	if( mResiver.size > 2560 )
-	{
-		uint32_t evenSpreadTrig =
-			float(getBlockPosition( mResiver.size /*+ AUDIO_BLOCK_SAMPLES -1*/ )) *
-				GRAINS_EVEN_SPREAD_TRIG_SCALE;
-		if(mSavedTriggGrain < evenSpreadTrig)
-			mTriggGrain = evenSpreadTrig;
-		else
-			mTriggGrain = mSavedTriggGrain;
-	}
+		{
+			size_t evenSpreadTrig =
+				float(getBlockPosition( mResiver.size )) *
+					mEvenSpreadTrigScale;
+			if(mSavedTriggGrain < evenSpreadTrig)
+				mTriggGrain = evenSpreadTrig;
+			else
+				mTriggGrain = mSavedTriggGrain;
+		}
 }
 
 void AudioEffectGrainer::pos(float ms)
@@ -434,10 +427,20 @@ float AudioEffectGrainer::bufferMS()
 	return block2ms(mAudioBuffer.len);
 }
 
-AudioEffectGrainer::AudioEffectGrainer() :
-		AudioStream(1, mInputQueueArray), mWindow(AudioWindowNuttall256)
+void AudioEffectGrainer::numberOfGrains(uint8_t n)
 {
-	mTriggCount = 0;
+	if(n>GRAINS_MAX_NUM)
+		n = GRAINS_MAX_NUM;
+	if(!n)
+		n = 1;
 
-	mConcurrentGrains = 0;
+	mMaxNumOfGrains = n;
+	mEvenSpreadTrigScale = 1.f/float(n);
+}
+
+AudioEffectGrainer::AudioEffectGrainer() :
+		AudioStream(1, mInputQueueArray),
+		mWindow(AudioWindowHanning256),
+		mTriggCount(0), mConcurrentGrains(0), mMaxNumOfGrains(GRAINS_MAX_NUM)
+{
 }
