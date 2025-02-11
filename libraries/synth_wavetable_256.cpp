@@ -40,7 +40,7 @@
  {
      audio_block_t *block;
      int16_t *bp, *end;
-     int32_t val1, val2;
+     int32_t val11, val12, val21, val22;
      int16_t magnitude15;
      uint32_t i, ph, index, index2, scale;
      const uint32_t inc = phase_increment;
@@ -61,7 +61,7 @@
  
      bp = block->data;
 
-    if (!arbdata) {
+    if (!arbdata1) {
         release(block);
         phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
         return;
@@ -71,12 +71,16 @@
         index = ph >> 24;
         index2 = index + 1;
         if (index2 >= 256) index2 = 0;
-        val1 = *(arbdata + index);
-        val2 = *(arbdata + index2);
+        val11 = *(arbdata1 + index);
+        val12 = *(arbdata1 + index2);
+        val21 = *(arbdata1 + index);
+        val22 = *(arbdata1 + index2);
         scale = (ph >> 8) & 0xFFFF;
-        val2 *= scale;
-        val1 *= 0x10000 - scale;
-        *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);
+        val12 *= scale;
+        val11 *= 0x10000 - scale;
+        val22 *= scale;
+        val21 *= 0x10000 - scale;
+        *bp++ = multiply_32x32_rshift32(val11 + val12, magnitude);
         ph += inc;
     }
 
@@ -86,8 +90,8 @@
          bp = block->data;
          end = bp + AUDIO_BLOCK_SAMPLES;
          do {
-             val1 = *bp;
-             *bp++ = signed_saturate_rshift(val1 + tone_offset, 16, 0);
+             val11 = *bp;
+             *bp++ = signed_saturate_rshift(val11 + tone_offset, 16, 0);
          } while (bp < end);
      }
      transmit(block, 0);
@@ -100,7 +104,7 @@
  {
      audio_block_t *block, *moddata, *shapedata;
      int16_t *bp, *end;
-     int32_t val1, val2;
+     int32_t val11, val12, val21, val22;
      int16_t magnitude15;
      uint32_t i, ph, index, index2, scale, priorphase;
      const uint32_t inc = phase_increment;
@@ -184,7 +188,7 @@
  
      // Now generate the output samples using the pre-computed phase angles
 
-    if (!arbdata) {
+    if (!arbdata1) {
         release(block);
         if (shapedata) release(shapedata);
         return;
@@ -195,20 +199,24 @@
         index = ph >> 24;
         index2 = index + 1;
         if (index2 >= 256) index2 = 0;
-        val1 = *(arbdata + index);
-        val2 = *(arbdata + index2);
+        val11 = *(arbdata1 + index);
+        val12 = *(arbdata1 + index2);
+        val21 = *(arbdata1 + index);
+        val22 = *(arbdata1 + index2);
         scale = (ph >> 8) & 0xFFFF;
-        val2 *= scale;
-        val1 *= 0x10000 - scale;
-        *bp++ = multiply_32x32_rshift32(val1 + val2, magnitude);
+        val12 *= scale;
+        val11 *= 0x10000 - scale;
+        val22 *= scale;
+        val21 *= 0x10000 - scale;
+        *bp++ = multiply_32x32_rshift32(val11 + val12, magnitude);
     }
  
      if (tone_offset) {
          bp = block->data;
          end = bp + AUDIO_BLOCK_SAMPLES;
          do {
-             val1 = *bp;
-             *bp++ = signed_saturate_rshift(val1 + tone_offset, 16, 0);
+             val11 = *bp;
+             *bp++ = signed_saturate_rshift(val11 + tone_offset, 16, 0);
          } while (bp < end);
      }
      if (shapedata) release(shapedata);

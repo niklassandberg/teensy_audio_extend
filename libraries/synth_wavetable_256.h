@@ -80,7 +80,8 @@
 	 AudioWavetable256(void) : AudioStream(0,NULL),
 		 phase_accumulator(0), phase_increment(0), phase_offset(0),
 		 magnitude(0), pulse_width(0x40000000),
-		 arbdata(AudioWaveformSine), sample(0),
+		 arbdata1(AudioWaveformSine), arbdata2(AudioWaveformSine),
+		 sample(0),
 		 tone_offset(0) {
 	 }
  
@@ -137,7 +138,15 @@
 		 begin (t_type);
 	 }
 	 void arbitraryWaveform(const int16_t *data, float maxFreq) {
-		 arbdata = data;
+		 arbdata1 = data;
+	 }
+	 void arbitraryWaveforms(const int16_t **data, const uint16_t num) {
+		if(num <= 0) return;
+		if(arbdata1==NULL) arbdata1 = data[0];
+		if(arbdata2==NULL) arbdata2 = data[0];
+		waveTables = data;
+		waveTableLength = num;
+		H = 65535/waveTableLength;
 	 }
 	 virtual void update(void);
  
@@ -147,11 +156,17 @@
 	 uint32_t phase_offset;
 	 int32_t  magnitude;
 	 uint32_t pulse_width;
-	 const int16_t *arbdata;
+	 const int16_t *arbdata1;
+	 const int16_t *arbdata2;
 	 int16_t  sample; // for WAVEFORM_SAMPLE_HOLD
 	 short    tone_type;
 	 int16_t  tone_offset;
-		 BandLimitedWaveform256 band_limit_waveform ;
+	BandLimitedWaveform256 band_limit_waveform ;
+
+	uint16_t morph;
+	uint32_t waveTableLength;
+	const int16_t ** waveTables;
+	uint16_t H;
  };
  
  
@@ -160,7 +175,7 @@
  public:
 	 AudioWavetable256Modulated(void) : AudioStream(2, inputQueueArray),
 		 phase_accumulator(0), phase_increment(0), modulation_factor(32768),
-		 magnitude(0), arbdata(AudioWaveformSine), sample(0), tone_offset(0), 
+		 magnitude(0), arbdata1(AudioWaveformSine), sample(0), tone_offset(0), 
 		 modulation_type(0) {
 	 }
  
@@ -198,7 +213,7 @@
 		 begin (t_type) ;
 	 }
 	 void arbitraryWaveform(const int16_t *data, float maxFreq) {
-		 arbdata = data;
+		 arbdata1 = data;
 	 }
 	 void frequencyModulation(float octaves) {
 		 if (octaves > 12.0f) {
@@ -226,15 +241,19 @@
 	 uint32_t phase_increment;
 	 uint32_t modulation_factor;
 	 int32_t  magnitude;
-	 const int16_t *arbdata;
+	 const int16_t *arbdata1;
 	 uint32_t phasedata[AUDIO_BLOCK_SAMPLES];
 	 int16_t  sample; // for WAVEFORM_SAMPLE_HOLD
 	 int16_t  tone_offset;
 	 uint8_t  tone_type;
 	 uint8_t  modulation_type;
-		 BandLimitedWaveform256 band_limit_waveform ;
+	BandLimitedWaveform256 band_limit_waveform ;
+
+	uint16_t morph;
+	uint32_t waveTableLength;
+	const int16_t ** waveTables;
+	uint16_t H;
  };
  
  
  #endif
- 
