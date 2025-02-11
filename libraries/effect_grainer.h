@@ -71,8 +71,6 @@ static constexpr float BLOCK_TO_MS_SCALE =
 static constexpr float MAX_BUFFERT_MS = BLOCK_TO_MS_SCALE * GRAIN_BLOCK_QUEUE_SIZE;
 
 static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = (uint32_t) ((uint64_t)AUDIO_BLOCK_SAMPLES << 24) - 1;
-//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
-//static constexpr uint32_t AUDIO_BLOCK_SAMPLES_24_BITOP = UINT32_MAX >> 1;
 
 template<int i> struct ShiftOp
 {
@@ -118,8 +116,6 @@ inline __attribute__((always_inline)) uint32_t getSampleIndex(uint32_t samples)
 struct GrainStruct
 {
 	float saved_pitchRatio = 0.f;
-	uint32_t saved_sampleStart = 0;
-
 	uint32_t sampleStart = 0; //grain first position relative to head.
 	uint32_t buffertPosition = 0; //next grain position in queue.
 	uint32_t size = ms2sample(100); //grain size
@@ -244,6 +240,9 @@ private:
 		void setOutputs(audio_block_t* out[4], GrainStruct* grain);
 	inline __attribute__((always_inline))
 		void transmitOutputs(audio_block_t* out[4]);
+	inline __attribute__((always_inline))
+		void releaseBlockOver(uint32_t l);
+
 
 public:
 
@@ -263,8 +262,9 @@ public:
 	void pos(float ms);
 	void amplitude(uint8_t ch, float n);
 
+	void blockLengthWithBlockRelease(uint32_t l);
+	void blockLength(uint16_t l);
 
-	void queueLength(uint16_t l);
 	void interval(float ms);
 
 	float bufferMS();
