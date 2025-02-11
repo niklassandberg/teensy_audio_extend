@@ -77,7 +77,7 @@
  class AudioWavetable256 : public AudioStream
  {
  public:
-	 AudioWavetable256(void) : AudioStream(0,NULL),
+	 AudioWavetable256(void) : AudioStream(1,inputQueueArray),
 		 phase_accumulator(0), phase_increment(0), phase_offset(0),
 		 magnitude(0), pulse_width(0x40000000),
 		 arbdata1(AudioWaveformSine), arbdata2(AudioWaveformSine),
@@ -151,6 +151,7 @@
 	 virtual void update(void);
  
  private:
+ 	audio_block_t *inputQueueArray[1];
 	 uint32_t phase_accumulator;
 	 uint32_t phase_increment;
 	 uint32_t phase_offset;
@@ -173,7 +174,7 @@
  class AudioWavetable256Modulated : public AudioStream
  {
  public:
-	 AudioWavetable256Modulated(void) : AudioStream(2, inputQueueArray),
+	 AudioWavetable256Modulated(void) : AudioStream(3, inputQueueArray),
 		 phase_accumulator(0), phase_increment(0), modulation_factor(32768),
 		 magnitude(0), arbdata1(AudioWaveformSine), sample(0), tone_offset(0), 
 		 modulation_type(0) {
@@ -236,7 +237,7 @@
 	 virtual void update(void);
  
  private:
-	 audio_block_t *inputQueueArray[2];
+	 audio_block_t *inputQueueArray[3];
 	 uint32_t phase_accumulator;
 	 uint32_t phase_increment;
 	 uint32_t modulation_factor;
