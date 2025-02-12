@@ -78,4 +78,30 @@ struct KnobsFilter
 	}
 };
 
+// computes sum + (((int64_t)a[31:0] * (int64_t)b[31:0]) >> 32)
+static inline int32_t multiply_accumulate_32x32_rshift32(int32_t sum, int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t multiply_accumulate_32x32_rshift32(int32_t sum, int32_t a, int32_t b)
+{
+#if defined (__ARM_ARCH_7EM__)
+	int32_t out;
+	asm volatile("smmla %0, %2, %3, %1" : "=r" (out) : "r" (sum), "r" (a), "r" (b));
+	return out;
+#elif defined(KINETISL)
+	return sum + ((((int64_t)a * (int64_t)b)) >> 32);
+#endif
+}
+
+// computes sum - (((int64_t)a[31:0] * (int64_t)b[31:0]) >> 32)
+static inline int32_t multiply_subtract_32x32_rshift32(int32_t sum, int32_t a, int32_t b) __attribute__((always_inline, unused));
+static inline int32_t multiply_subtract_32x32_rshift32(int32_t sum, int32_t a, int32_t b)
+{
+#if defined (__ARM_ARCH_7EM__)
+	int32_t out;
+	asm volatile("smmls %0, %2, %3, %1" : "=r" (out) : "r" (sum), "r" (a), "r" (b));
+	return out;
+#elif defined(KINETISL)
+	return sum - ((((int64_t)a * (int64_t)b)) >> 32);
+#endif
+}
+
 #endif

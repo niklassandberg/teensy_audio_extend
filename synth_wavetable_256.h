@@ -30,6 +30,7 @@
  #include <Arduino.h>
  #include "AudioStream.h"
  #include "arm_math.h"
+ #include "ns_utility.h"
  
  // waveforms.c
  extern "C" {
@@ -80,9 +81,9 @@
 	 AudioWavetable256(void) : AudioStream(1,inputQueueArray),
 		 phase_accumulator(0), phase_increment(0), phase_offset(0),
 		 magnitude(0), pulse_width(0x40000000),
-		 arbdata1(AudioWaveformSine), arbdata2(AudioWaveformSine),
-		 sample(0),
-		 tone_offset(0) {
+		 arbdata1(AudioWaveformSine), arbdata2(AudioWaveformSine), wave_tables(NULL),
+		 sample(0), waveTableHalfLength(0),
+		 tone_offset(0), old_indexw1(10000) {
 	 }
  
 	 void frequency(float freq) {
@@ -141,13 +142,27 @@
 		 arbdata1 = data;
 	 }
 	 void arbitraryWaveforms(const int16_t **data, const uint16_t num) {
-		if(num <= 0) return;
-		if(arbdata1==NULL) arbdata1 = data[0];
-		if(arbdata2==NULL) arbdata2 = data[0];
-		waveTables = data;
+		if(num < 2) return;
+		arbdata1 = data[0];
+		arbdata2 = data[1];
+		
+		wave_tables = data;
 		waveTableLength = num;
-		H = 65535/waveTableLength;
+		waveTableHalfLength = 0.5f + float(waveTableLength)/2.f;
+		index_to_trunc_scale = 0.5f + 2147483647.f/float(waveTableLength);
 	 }
+	 
+	void waveSelect(float s) {
+		s = s * 2 - 1;
+		if( s < -1.f) {
+			s = -1.f;
+		}
+		else if(s > 1.f) {
+			s = 1.f;
+		}
+		scanw = s * 2147483647.f;
+	}
+
 	 virtual void update(void);
  
  private:
@@ -164,10 +179,13 @@
 	 int16_t  tone_offset;
 	BandLimitedWaveform256 band_limit_waveform ;
 
-	uint16_t morph;
-	uint32_t waveTableLength;
-	const int16_t ** waveTables;
-	uint16_t H;
+	int32_t scanw;
+	int32_t waveTableLength;
+	int32_t waveTableHalfLength;
+	int32_t index_to_trunc_scale;
+	const int16_t ** wave_tables;
+
+	int16_t old_indexw1;
  };
  
  
@@ -234,6 +252,7 @@
 		 modulation_factor = degrees * (float)(65536.0 / 180.0);
 		 modulation_type = 1;
 	 }
+
 	 virtual void update(void);
  
  private:
@@ -250,9 +269,8 @@
 	 uint8_t  modulation_type;
 	BandLimitedWaveform256 band_limit_waveform ;
 
-	uint16_t morph;
 	uint32_t waveTableLength;
-	const int16_t ** waveTables;
+	const int16_t ** wave_tables;
 	uint16_t H;
  };
  

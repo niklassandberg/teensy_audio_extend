@@ -34,18 +34,23 @@
  //#define IMPROVE_EXPONENTIAL_ACCURACY
  #define BASE_AMPLITUDE 0x6000  // 0x7fff won't work due to Gibb's phenomenon, so use 3/4 of full range.
  
- 
- 
+
+
  void AudioWavetable256::update(void)
  {
-     audio_block_t *block;
-     int16_t *bp, *end;
+     audio_block_t *block, *modavetable;
+     int16_t *bp, *mbp, *end;
      int32_t val11, val12, val21, val22;
      int16_t magnitude15;
-     uint32_t i, ph, index, index2, scale;
+     uint32_t i, ph, scale;
+     uint8_t index, index2; //wraps value. No need to do //if (index2 >= 256) index2 = 0;
      const uint32_t inc = phase_increment;
  
      ph = phase_accumulator + phase_offset;
+
+     if(wave_tables==NULL) {
+      return;
+     }
  
      if (magnitude == 0) {
          phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
@@ -58,8 +63,12 @@
          phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
          return;
      }
+     
+    modavetable = receiveReadOnly(0);
  
-     bp = block->data;
+    bp = block->data;
+    if(modavetable) 
+      mbp = modavetable->data;
 
     if (!arbdata1) {
         release(block);
@@ -70,18 +79,67 @@
     for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
         index = ph >> 24;
         index2 = index + 1;
-        if (index2 >= 256) index2 = 0;
+        //if (index2 >= 256) index2 = 0;
+
+        //DOING WAVE SCAN - START
+        int32_t mod_scanw1 = scanw;
+        if(modavetable) mod_scanw1 += int32_t(*mbp++) << 15; //wraping int
+        int32_t indexw1 = multiply_32x32_rshift32(mod_scanw1, waveTableLength)+waveTableHalfLength;
+        int32_t indexw2 = indexw1 + 1;
+        if(indexw2>=88) indexw2 = 0;
+        //int32_t interp_saw = (multiply_32x32_rshift32(mod_scanw1,2147483647)+1073741824) - indexw1 * index_to_trunc_scale;
+        int32_t interp_full = int64_t(mod_scanw1 + 2147483648)/2;//  - uint32_t(indexw1 * index_to_trunc_scale);
+        int32_t interp_trunc = uint32_t(indexw1 * index_to_trunc_scale);
+
+        int32_t interp_saw = interp_full - interp_trunc;
+        
+        /*
+        Serial.print("indexw1: ");
+        Serial.println(indexw1);
+        Serial.print("interp_full: ");
+        Serial.println(interp_full);
+        Serial.print("interp_trunc: ");
+        Serial.println(interp_trunc);
+        Serial.print("interp_saw: ");
+        Serial.println(interp_saw);
+        */
+
+
+      
+        
+        
+        /*
+        //TODO: optimice
+        if (indexw1 < 0) {
+          indexw1 = waveTableLength + indexw1;
+        }
+        if( old_indexw1 != indexw1 ) {
+          uint32_t indexw2 = indexw1+1;
+          while (indexw2 >= waveTableLength) {
+            indexw2 = indexw2 - waveTableLength;
+          }
+          arbdata1 = wave_tables[1 ];
+          arbdata2 = wave_tables[1];
+          old_indexw1 = indexw1;
+        }
+        */
+
+        //DOING WAVE SCAN - END
+
         val11 = *(arbdata1 + index);
         val12 = *(arbdata1 + index2);
-        val21 = *(arbdata1 + index);
-        val22 = *(arbdata1 + index2);
+        val21 = *(arbdata2 + index); //TODO
+        val22 = *(arbdata2 + index2); //TODO
         scale = (ph >> 8) & 0xFFFF;
         val12 *= scale;
         val11 *= 0x10000 - scale;
         val22 *= scale;
         val21 *= 0x10000 - scale;
-        *bp++ = multiply_32x32_rshift32(val11 + val12, magnitude);
-        ph += inc;
+        int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
+        int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
+
+      *bp++ = out2;
+      ph += inc;
     }
 
      phase_accumulator = ph - phase_offset;
@@ -94,6 +152,8 @@
              *bp++ = signed_saturate_rshift(val11 + tone_offset, 16, 0);
          } while (bp < end);
      }
+
+     if(modavetable) release(modavetable);
      transmit(block, 0);
      release(block);
  }
