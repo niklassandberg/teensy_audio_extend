@@ -4,8 +4,8 @@
  *      Author: niksan
  */
 
-#ifndef ns_utility_h_
-#define ns_utility_h_
+#ifndef ns_utility2_h_
+#define ns_utility2_h_
 
 #include <stdint.h>
 #include <utility/dspinst.h>
@@ -23,6 +23,7 @@ static inline int32_t multiply_accumulate_32x32_rshift32_rounded(int32_t sum, in
 #endif
 }*/
 
+/**/
 // computes (a + b), result saturated to 32 bit unsigned integer range
 static inline uint32_t signed_add_32_saturate(uint32_t a, uint32_t b) __attribute__((always_inline, unused));
 static inline uint32_t signed_add_32_saturate(uint32_t a, uint32_t b)
@@ -78,6 +79,7 @@ struct KnobsFilter
 	}
 };
 
+/*
 // computes sum + (((int64_t)a[31:0] * (int64_t)b[31:0]) >> 32)
 static inline int32_t multiply_accumulate_32x32_rshift32(int32_t sum, int32_t a, int32_t b) __attribute__((always_inline, unused));
 static inline int32_t multiply_accumulate_32x32_rshift32(int32_t sum, int32_t a, int32_t b)
@@ -103,5 +105,5 @@ static inline int32_t multiply_subtract_32x32_rshift32(int32_t sum, int32_t a, i
 	return sum - ((((int64_t)a * (int64_t)b)) >> 32);
 #endif
 }
-
+*/
 #endif
