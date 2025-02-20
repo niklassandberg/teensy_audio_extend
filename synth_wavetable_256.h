@@ -39,7 +39,7 @@
  class AudioWavetable256 : public AudioStream
  {
  public:
-	 AudioWavetable256(void) : AudioStream(0,NULL),
+	 AudioWavetable256(void) : AudioStream(1,inputQueueArray),
 		 phase_accumulator(0), phase_increment(0), phase_offset(0),
 		 magnitude(0), modMagnitude(0), wave_tables(NULL), tone_offset(0), scanw(0) {
 	 }
@@ -76,9 +76,7 @@
 		 } else if (n > 1.0f) {
 			 n = 1.0;
 		 }
-		 //TODO: what!!!
-		 int64_t ni = n * 4294967296.0f;
-		 modMagnitude = n * 65536.0f;
+		 modMagnitude = n * 2147483647.0f;
 	 }
 	 void offset(float n) {
 		 if (n < -1.0f) {
@@ -113,16 +111,15 @@
 	 int32_t debugFlag;
 
  private:
+ 	audio_block_t *inputQueueArray[1];
 	 uint32_t phase_accumulator;
 	 uint32_t phase_increment;
 	 uint32_t phase_offset;
 	 int32_t  magnitude;
-	 int16_t  modMagnitude;
+	 int32_t  modMagnitude;
 	 const int16_t **wave_tables;
 	 uint32_t scanw;
 	 int16_t  tone_offset;
-
-
  };
  
  #endif

@@ -47,23 +47,17 @@
  
      ph = phase_accumulator + phase_offset;
 
-     if(debugFlag == 0) debugFlag = 1;
-
      if(wave_tables==NULL) {
-      debugFlag = 1111;
       return;
      }
  
      if (magnitude == 0) {
          phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
-         debugFlag = 2222;
          return;
      }
      
      block = allocate();
      
-     debugFlag = 2;
-
      if (!block) {
          phase_accumulator += inc * AUDIO_BLOCK_SAMPLES;
          return;
@@ -77,9 +71,6 @@
       mbp = freqScanWavetable->data;
     }
 
-    
-    if(debugFlag == 2) debugFlag = 3;
-
     // len = 256
     for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
         index = ph >> 24;
@@ -88,20 +79,20 @@
         
         
         uint32_t val = scanw;
-        /*if(mbp) {
-          //TODO: just remake....
-          val += multiply_32x32_rshift32(int32_t(*mbp++)*0x10000+0xFFFF,modMagnitude);
-        }*/
-
-        
-
+        if(mbp) {
+          int16_t modVal = *mbp++;
+          int32_t positive = uint32_t(32768+int32_t(modVal)) << 16;
+          if(modVal>0) {
+            val += multiply_32x32_rshift32( positive,modMagnitude);
+          } else {
+            val -= multiply_32x32_rshift32( positive,modMagnitude);
+          }
+          debugFlag = val;
+        }
         uint8_t wtIndex0 = val >> 24;
         uint8_t wtIndex2 = wtIndex0 + 1; //wrap
         //if (index2 >= 256) index2 = 0; //wrap
         uint32_t interpolate = val & 0xFFFFFF;
-        //int32_t interpolate = (val >> 8) & 0xFFFF;
-
-        //DOING WAVE SCAN - END
 
         int16_t *arbdata1 = wave_tables[wtIndex0];
         int16_t *arbdata2 = wave_tables[wtIndex2];
@@ -118,26 +109,20 @@
         int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
         int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
 
-        if(debugFlag == 3) debugFlag = 4;
-
         int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
         int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
         *bp++ = out_scan_2 + out_scan_1;
         //*bp++ = out1;
         ph += inc;
-        
-        if(debugFlag == 4) debugFlag = 5;
     }
 
      phase_accumulator = ph - phase_offset;
- 
-
-     if(debugFlag == 5) debugFlag = 6;
 
      if (tone_offset) {
          bp = block->data;
          end = bp + AUDIO_BLOCK_SAMPLES;
          do {
+          //TODO: what!!!!
              val11 = *bp;
              *bp++ = signed_saturate_rshift(val11 + tone_offset, 16, 0);
          } while (bp < end);
