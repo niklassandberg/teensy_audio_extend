@@ -82,7 +82,7 @@
         if(mbp) {
           int16_t modVal = *mbp++;
           int32_t positive = uint32_t(32768+int32_t(modVal)) << 16;
-          if(modVal>0) {
+          if(modVal>=0) {
             val += multiply_32x32_rshift32( positive,modMagnitude);
           } else {
             val -= multiply_32x32_rshift32( positive,modMagnitude);
@@ -122,7 +122,6 @@
          bp = block->data;
          end = bp + AUDIO_BLOCK_SAMPLES;
          do {
-          //TODO: what!!!!
              val11 = *bp;
              *bp++ = signed_saturate_rshift(val11 + tone_offset, 16, 0);
          } while (bp < end);
