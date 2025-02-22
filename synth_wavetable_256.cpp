@@ -107,9 +107,9 @@
         val21 *= 0x10000 - scale;
         int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
         int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
-
-        int32_t out_scan_1 = multiply_32x32_rshift32(0x100000000 - interpolate,out1);
-        int32_t out_scan_2 = multiply_32x32_rshift32(interpolate,out2);
+    
+        int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
+        int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
         *bp++ = out_scan_2 + out_scan_1;
         //*bp++ = out1;
         ph += inc;
@@ -233,6 +233,7 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
     
     
     uint32_t val = scanw;
+    
     if(mbp) {
       int16_t modVal = *mbp++;
       int32_t positive = uint32_t(32768+int32_t(modVal)) << 16;
@@ -242,6 +243,7 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
         val -= multiply_32x32_rshift32( positive,modMagnitude);
       }
     }
+      
     uint8_t wtIndex0 = val >> 24;
     uint8_t wtIndex2 = wtIndex0 + 1; //wrap
     //if (index2 >= 256) index2 = 0; //wrap

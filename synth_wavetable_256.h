@@ -202,6 +202,7 @@
 		 if(s > 1.f) {
 			 s = 1.f;
 		 }
+		 Serial.println("SHOULD NOT HAPPEN!!!!!!!");
 		 scanw = s * 4294967295.f;
 	 }
 	 
