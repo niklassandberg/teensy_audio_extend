@@ -91,7 +91,7 @@
         uint8_t wtIndex0 = val >> 24;
         uint8_t wtIndex2 = wtIndex0 + 1; //wrap
         //if (index2 >= 256) index2 = 0; //wrap
-        uint32_t interpolate = val & 0xFFFFFF;
+        uint32_t interpolate = (val & 0xFFFFFF)*0x100;
 
         int16_t *arbdata1 = wave_tables[wtIndex0];
         int16_t *arbdata2 = wave_tables[wtIndex2];
@@ -108,8 +108,8 @@
         int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
         int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
 
-        int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
-        int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
+        int32_t out_scan_1 = multiply_32x32_rshift32(0x100000000 - interpolate,out1);
+        int32_t out_scan_2 = multiply_32x32_rshift32(interpolate,out2);
         *bp++ = out_scan_2 + out_scan_1;
         //*bp++ = out1;
         ph += inc;
