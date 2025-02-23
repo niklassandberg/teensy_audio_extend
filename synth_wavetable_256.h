@@ -110,6 +110,9 @@
 	 
 	 virtual void update(void);
 
+	 void phaseModulation(float kasta){}
+	 void frequencyModulation(float kasta){}
+
  private:
  	audio_block_t *inputQueueArray[1];
 	 uint32_t phase_accumulator;
@@ -202,7 +205,6 @@
 		 if(s > 1.f) {
 			 s = 1.f;
 		 }
-		 Serial.println("SHOULD NOT HAPPEN!!!!!!!");
 		 scanw = s * 4294967295.f;
 	 }
 	 
@@ -224,6 +226,8 @@
 	 int16_t  tone_offset;
 	 uint8_t  tone_type;
 	 uint8_t  modulation_type;
+
+	 int debugOldIndex;
  };
 
  #endif

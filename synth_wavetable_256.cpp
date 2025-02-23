@@ -90,26 +90,26 @@
         }
         uint8_t wtIndex0 = val >> 24;
         uint8_t wtIndex2 = wtIndex0 + 1; //wrap
-        //if (index2 >= 256) index2 = 0; //wrap
-        uint32_t interpolate = (val & 0xFFFFFF)*0x100;
+    //if (index2 >= 256) index2 = 0; //wrap
+    uint32_t interpolate = val & 0xFFFFFF;
 
-        int16_t *arbdata1 = wave_tables[wtIndex0];
-        int16_t *arbdata2 = wave_tables[wtIndex2];
+    int16_t *arbdata1 = wave_tables[wtIndex0];
+    int16_t *arbdata2 = wave_tables[wtIndex2];
 
-        val11 = *(arbdata1 + index);
-        val12 = *(arbdata1 + index2);
-        val21 = *(arbdata2 + index); //TODO
-        val22 = *(arbdata2 + index2); //TODO
-        scale = (ph >> 8) & 0xFFFF;
-        val12 *= scale;
-        val11 *= 0x10000 - scale;
-        val22 *= scale;
-        val21 *= 0x10000 - scale;
-        int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
-        int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
-    
-        int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
-        int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
+    val11 = *(arbdata1 + index);
+    val12 = *(arbdata1 + index2);
+    val21 = *(arbdata2 + index); //TODO
+    val22 = *(arbdata2 + index2); //TODO
+    scale = (ph >> 8) & 0xFFFF;
+    val12 *= scale;
+    val11 *= 0x10000 - scale;
+    val22 *= scale;
+    val21 *= 0x10000 - scale;
+    int32_t out1 = multiply_32x32_rshift32(val11 + val12, magnitude);
+    int32_t out2 = multiply_32x32_rshift32(val21 + val22, magnitude);
+
+    int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
+    int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
         *bp++ = out_scan_2 + out_scan_1;
         //*bp++ = out1;
         ph += inc;
@@ -245,6 +245,14 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
     }
       
     uint8_t wtIndex0 = val >> 24;
+
+    int debugNewIndex = wtIndex0;
+    if(debugOldIndex != debugNewIndex) {
+      Serial.print("new index:");
+      Serial.println(debugNewIndex);
+      debugOldIndex = debugNewIndex;
+    }
+
     uint8_t wtIndex2 = wtIndex0 + 1; //wrap
     //if (index2 >= 256) index2 = 0; //wrap
     uint32_t interpolate = val & 0xFFFFFF;
@@ -266,8 +274,8 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
 
     int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
     int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
-    *bp++ = out_scan_2 + out_scan_1;
-    //*bp++ = out1;
+   // *bp++ = out_scan_2 + out_scan_1;
+    *bp++ = out1;
 }
 
   if (tone_offset) {
