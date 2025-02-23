@@ -209,8 +209,6 @@
 	 }
 	 
 	 virtual void update(void);
-
-	 int32_t debugFlag;
  
  private:
 	 audio_block_t *inputQueueArray[2];
@@ -226,8 +224,6 @@
 	 int16_t  tone_offset;
 	 uint8_t  tone_type;
 	 uint8_t  modulation_type;
-
-	 int debugOldIndex;
  };
 
  #endif

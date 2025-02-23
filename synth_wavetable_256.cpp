@@ -146,7 +146,6 @@
 	ph = phase_accumulator;
 	priorphase = phasedata[AUDIO_BLOCK_SAMPLES-1];
 	if (moddata && modulation_type == 0) {
-    debugFlag = 1;
 		// Frequency Modulation
 		bp = moddata->data;
 		for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
@@ -246,13 +245,6 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
       
     uint8_t wtIndex0 = val >> 24;
 
-    int debugNewIndex = wtIndex0;
-    if(debugOldIndex != debugNewIndex) {
-      Serial.print("new index:");
-      Serial.println(debugNewIndex);
-      debugOldIndex = debugNewIndex;
-    }
-
     uint8_t wtIndex2 = wtIndex0 + 1; //wrap
     //if (index2 >= 256) index2 = 0; //wrap
     uint32_t interpolate = val & 0xFFFFFF;
@@ -274,8 +266,8 @@ for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
 
     int32_t out_scan_1 = multiply_32x32_rshift32( (0x1000000 - interpolate)*0x10,out1*0x10);
     int32_t out_scan_2 = multiply_32x32_rshift32(interpolate*0x10,out2*0x10);
-   // *bp++ = out_scan_2 + out_scan_1;
-    *bp++ = out1;
+    *bp++ = out_scan_2 + out_scan_1;
+    //*bp++ = out1;
 }
 
   if (tone_offset) {
